@@ -1,0 +1,78 @@
+"""File-system walker — discovers files, applies ignore specs, filters binaries."""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from codectx.config.defaults import BINARY_CHECK_BYTES, MAX_IO_WORKERS
+from codectx.ignore import build_ignore_spec, should_ignore
+
+
+def walk(
+    root: Path,
+    extra_ignore: tuple[str, ...] = (),
+    output_file: Path | None = None,
+) -> list[Path]:
+    """Recursively discover non-ignored, non-binary files under *root*.
+
+    Args:
+        root: Repository root directory.
+        extra_ignore: Additional ignore patterns from config.
+        output_file: Output file to exclude from results (prevents self-inclusion).
+
+    Returns:
+        Sorted list of absolute file paths.
+    """
+    root = root.resolve()
+    spec = build_ignore_spec(root, extra_ignore)
+
+    # Resolve output file path for exclusion
+    excluded: Path | None = None
+    if output_file is not None:
+        excluded = (root / output_file).resolve() if not output_file.is_absolute() else output_file.resolve()
+
+    # Collect candidates (avoids descending into ignored directories)
+    candidates: list[Path] = []
+    _collect(root, root, spec, candidates)
+
+    # Filter binaries in parallel
+    with ThreadPoolExecutor(max_workers=MAX_IO_WORKERS) as pool:
+        results = list(pool.map(lambda p: (p, _is_binary(p)), candidates))
+
+    files = sorted(
+        (p for p, is_bin in results if not is_bin and p != excluded),
+        key=lambda p: p.relative_to(root).as_posix(),
+    )
+    return files
+
+
+def _collect(
+    current: Path,
+    root: Path,
+    spec: "object",  # pathspec.PathSpec
+    out: list[Path],
+) -> None:
+    """Recursively collect files, pruning ignored directories."""
+    try:
+        entries = sorted(current.iterdir(), key=lambda e: e.name)
+    except PermissionError:
+        return
+
+    for entry in entries:
+        if should_ignore(spec, entry, root):  # type: ignore[arg-type]
+            continue
+        if entry.is_dir():
+            _collect(entry, root, spec, out)
+        elif entry.is_file():
+            out.append(entry)
+
+
+def _is_binary(path: Path) -> bool:
+    """Detect binary files by checking for null bytes in first N bytes."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(BINARY_CHECK_BYTES)
+        return b"\x00" in chunk
+    except (OSError, IOError):
+        return True  # treat unreadable files as binary
