@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+.pytest_cache
+.codectx_cache
+.ruff_cache
+.mypy_cache
+
+.vscode
+.idea

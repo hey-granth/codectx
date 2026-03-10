@@ -120,152 +120,56 @@ CLI flags > .contextcraft.toml > defaults
 graph LR
     f0["src/codectx/cli.py"]
     f1["main.py"]
-    f2["src/codectx/walker.py"]
-    f3["src/codectx/safety.py"]
-    f4["src/codectx/ignore.py"]
-    f5["src/codectx/parser/languages.py"]
-    f6["tests/__init__.py"]
-    f7["tests/test_integration.py"]
-    f8["tests/test_compressor.py"]
-    f9["tests/test_scorer.py"]
-    f10["tests/test_parser.py"]
-    f11["tests/test_walker.py"]
-    f12["tests/test_ignore.py"]
-    f13["src/codectx/cache.py"]
-    f14["src/codectx/output/formatter.py"]
-    f15["src/codectx/output/sections.py"]
-    f16["src/codectx/compressor/tiered.py"]
-    f17["src/codectx/compressor/budget.py"]
-    f18["src/codectx/ranker/scorer.py"]
-    f19["src/codectx/ranker/git_meta.py"]
-    f20["src/codectx/graph/builder.py"]
-    f21["src/codectx/graph/resolver.py"]
-    f22["src/codectx/parser/treesitter.py"]
-    f23["src/codectx/parser/base.py"]
-    f24["src/codectx/config/loader.py"]
-    f25["src/codectx/config/defaults.py"]
-    f26["src/codectx/output/__init__.py"]
-    f27["src/codectx/compressor/__init__.py"]
-    f28["src/codectx/ranker/__init__.py"]
-    f29["src/codectx/graph/__init__.py"]
-    f30["src/codectx/parser/__init__.py"]
-    f31["src/codectx/config/__init__.py"]
-    f32["src/codectx/__init__.py"]
-    f33["pyproject.toml"]
-    f34[".gitignore"]
-    f35[".python-version"]
-    f36["README.md"]
-    f37["ARCHITECTURE.md"]
-    f38["CLAUDE.md"]
-    f39["DECISIONS.md"]
-    f40["PLAN.md"]
-```
-
-## CORE_MODULES
-
-### `src/codectx/cli.py`
-
-> codectx CLI — typer entrypoint wiring the full pipeline."""
-
-
-
-```python
-def alyze(
-(    root: Path = typer.Argument(
-        ".",
-        help="Repository root directory to analyze.",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
-    ),
-    tokens: int = typer.Option(
-        None,
-        "--tokens",
-        "-t",
-        help="Token budget (default: 120000).",
-    ),
-    output: Path = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output file path (default: CONTEXT.md).",
-    ),
-    since: Optional[str] = typer.Option(
-        None,
-        "--since",
-        help="Include recent changes since this date (e.g. '7 days ago').",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Enable verbose logging.",
-    ),
-    no_git: bool = typer.Option(
-        False,
-        "--no-git",
-        help="Skip git metadata collection.",
-    ),
-) -) -> ne:
-
-    """"Analyze a codebase and generate CONTEXT.md.""""""
-
-def hmark(
-  (  root: Path = typer.Argument(
-        ".",
-        help="Repository root directory.",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
-    ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-    no_git: bool = typer.Option(False, "--no-git"),
-) -> ) -> :
-  
-    """un analysis with detailed timing and stats.""""""
-
-def h(
-  (  root: Path = typer.Argument(
-        ".",
-        help="Repository root directory.",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
-    ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),
-    output: Path = typer.Option(None, "--output", "-o"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-    no_git: bool = typer.Option(False, "--no-git"),
-) -> ) -> :
-  
-    """atch for file changes and regenerate CONTEXT.md.""""""
-
-def (
-  (  version: bool = typer.Option(
-        False,
-        "--version",
-        "-V",
-        help="Show version and exit.",
-    ),
-) -> ) -> :
-  
-    """odectx — Codebase context compiler for AI agents."""
-    i"""
-
-def ipeline(confi(g: "object") -> Pa) ->     
-    """the full codectx pipeline and return the output file path."""
-    f"""
-
-def _logging(verbo(se: bool) -> No) ->     
-    """figure logging for the CLI."""
-    l"""
-
+    f2["tests/unit/__init__.py"]
+    f3["tests/unit/test_cache_wiring.py"]
+    f4[".gitignore"]
+    f5["src/codectx/walker.py"]
+    f6["src/codectx/safety.py"]
+    f7["src/codectx/ignore.py"]
+    f8["src/codectx/parser/languages.py"]
+    f9["tests/__init__.py"]
+    f10["tests/test_integration.py"]
+    f11["tests/test_compressor.py"]
+    f12["tests/test_scorer.py"]
+    f13["tests/test_parser.py"]
+    f14["tests/test_walker.py"]
+    f15["tests/test_ignore.py"]
+    f16["src/codectx/cache.py"]
+    f17["src/codectx/output/formatter.py"]
+    f18["src/codectx/output/sections.py"]
+    f19["src/codectx/compressor/tiered.py"]
+    f20["src/codectx/compressor/budget.py"]
+    f21["src/codectx/ranker/scorer.py"]
+    f22["src/codectx/ranker/git_meta.py"]
+    f23["src/codectx/graph/builder.py"]
+    f24["src/codectx/graph/resolver.py"]
+    f25["src/codectx/parser/treesitter.py"]
+    f26["src/codectx/parser/base.py"]
+    f27["src/codectx/config/loader.py"]
+    f28["src/codectx/config/defaults.py"]
+    f29["src/codectx/output/__init__.py"]
+    f30["src/codectx/compressor/__init__.py"]
+    f31["src/codectx/ranker/__init__.py"]
+    f32["src/codectx/graph/__init__.py"]
+    f33["src/codectx/parser/__init__.py"]
+    f34["src/codectx/config/__init__.py"]
+    f35["src/codectx/__init__.py"]
+    f36["pyproject.toml"]
+    f37[".python-version"]
+    f38["README.md"]
+    f39["ARCHITECTURE.md"]
+    f40["CLAUDE.md"]
+    f41["DECISIONS.md"]
+    f42["PLAN.md"]
 ```
 
 ## PERIPHERY
 
+- `src/codectx/cli.py` — codectx CLI — typer entrypoint wiring the full pipeline."""
 - `main.py` — 1 function, 7 lines
+- `tests/unit/__init__.py` — 0 lines
+- `tests/unit/test_cache_wiring.py` — Tests for cache wiring into the analyze pipeline.
+- `.gitignore` — 18 lines
 - `src/codectx/walker.py` — File-system walker — discovers files, applies ignore specs, filters binaries."""
 - `src/codectx/safety.py` — Sensitive-file detection and user confirmation.
 - `src/codectx/ignore.py` — Ignore-spec handling — layers ALWAYS_IGNORE, .gitignore, .ctxignore."""
@@ -298,7 +202,6 @@ def _logging(verbo(se: bool) -> No) ->
 - `src/codectx/config/__init__.py` — 0 lines
 - `src/codectx/__init__.py` — codectx — Codebase context compiler for AI agents."""
 - `pyproject.toml` — 86 lines
-- `.gitignore` — 11 lines
 - `.python-version` — 2 lines
 - `README.md` — 0 lines
 - `ARCHITECTURE.md` — 113 lines

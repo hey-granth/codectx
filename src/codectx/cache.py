@@ -100,6 +100,45 @@ class Cache:
         self._data.pop(key, None)
         self._data.pop(f"tokens:{path}", None)
 
+    def export_cache(self, output: Path) -> None:
+        """Export cache directory as a tar.gz archive for CI sharing.
+
+        Args:
+            output: Path where the archive will be written.
+        """
+        import tarfile
+
+        self.save()  # Ensure cache is persisted first
+        if not self.cache_dir.is_dir():
+            raise FileNotFoundError(f"Cache directory not found: {self.cache_dir}")
+
+        with tarfile.open(output, "w:gz") as tar:
+            tar.add(self.cache_dir, arcname=CACHE_DIR_NAME)
+
+        logger.info("Cache exported to %s", output)
+
+    @classmethod
+    def import_cache(cls, archive: Path, root: Path) -> "Cache":
+        """Import cache from a tar.gz archive.
+
+        Args:
+            archive: Path to the archive to import.
+            root: Repository root where cache should be restored.
+
+        Returns:
+            A new Cache instance loaded from the imported data.
+        """
+        import tarfile
+
+        if not archive.is_file():
+            raise FileNotFoundError(f"Archive not found: {archive}")
+
+        with tarfile.open(archive, "r:gz") as tar:
+            tar.extractall(path=root, filter="data")
+
+        logger.info("Cache imported from %s to %s", archive, root / CACHE_DIR_NAME)
+        return cls(root)
+
 
 def file_hash(path: Path) -> str:
     """Compute a fast hash of file contents."""

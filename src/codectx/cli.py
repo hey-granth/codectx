@@ -13,6 +13,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from codectx.config.defaults import CACHE_DIR_NAME
+
 from codectx import __version__
 
 app = typer.Typer(
@@ -61,12 +63,28 @@ def analyze(
         "--no-git",
         help="Skip git metadata collection.",
     ),
+    query: Optional[str] = typer.Option(
+        None,
+        "--query",
+        "-q",
+        help="Semantic query to rank files by relevance (requires codectx[semantic]).",
+    ),
+    extra_roots: Optional[list[Path]] = typer.Option(
+        None,
+        "--extra-root",
+        help="Additional root directories for multi-root analysis.",
+    ),
 ) -> None:
     """Analyze a codebase and generate CONTEXT.md."""
     _setup_logging(verbose)
     start_time = time.perf_counter()
 
     from codectx.config.loader import load_config
+
+    # Build roots list: primary root + any extra roots
+    roots_list: list[Path] | None = None
+    if extra_roots:
+        roots_list = [root] + list(extra_roots)
 
     config = load_config(
         root,
@@ -75,6 +93,8 @@ def analyze(
         since=since,
         verbose=verbose,
         no_git=no_git,
+        query=query or "",
+        roots=roots_list,
     )
 
     result_path = _run_pipeline(config)
@@ -222,6 +242,73 @@ def watch(
         console.print("\n[bold]Watch stopped.[/]")
 
 
+# ---------------------------------------------------------------------------
+# Cache commands
+# ---------------------------------------------------------------------------
+
+cache_app = typer.Typer(help="Manage the codectx cache.")
+app.add_typer(cache_app, name="cache")
+
+
+@cache_app.command("export")
+def cache_export(
+    root: Path = typer.Argument(
+        ".",
+        help="Repository root directory.",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+    ),
+    output: Path = typer.Option(
+        ".codectx_cache.tar.gz",
+        "--output",
+        "-o",
+        help="Output archive path.",
+    ),
+) -> None:
+    """Export the cache as a tar.gz archive for CI sharing."""
+    from codectx.cache import Cache
+
+    cache = Cache(root)
+    try:
+        cache.export_cache(output)
+        console.print(
+            f"[bold green]✓[/] Cache exported to [bold]{output}[/]"
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[red]Error:[/] {exc}")
+        raise typer.Exit(1)
+
+
+@cache_app.command("import")
+def cache_import(
+    root: Path = typer.Argument(
+        ".",
+        help="Repository root directory.",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+    ),
+    archive: Path = typer.Option(
+        ".codectx_cache.tar.gz",
+        "--input",
+        "-i",
+        help="Input archive path.",
+    ),
+) -> None:
+    """Import a cache archive for CI sharing."""
+    from codectx.cache import Cache
+
+    try:
+        Cache.import_cache(archive, root)
+        console.print(
+            f"[bold green]✓[/] Cache imported from [bold]{archive}[/]"
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[red]Error:[/] {exc}")
+        raise typer.Exit(1)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     version: bool = typer.Option(
@@ -244,16 +331,19 @@ def main(
 
 def _run_pipeline(config: "object") -> Path:
     """Run the full codectx pipeline and return the output file path."""
+    import hashlib
+
+    from codectx.cache import Cache
     from codectx.compressor.budget import TokenBudget
     from codectx.compressor.tiered import compress_files
     from codectx.config.loader import Config
     from codectx.graph.builder import build_dependency_graph
     from codectx.output.formatter import format_context, write_context_file
-    from codectx.parser.treesitter import parse_files
+    from codectx.parser.treesitter import parse_file, parse_files
     from codectx.ranker.git_meta import collect_git_metadata
     from codectx.ranker.scorer import score_files
     from codectx.safety import confirm_sensitive_files, find_sensitive_files
-    from codectx.walker import walk
+    from codectx.walker import walk, walk_multi
 
     assert isinstance(config, Config)
 
@@ -263,9 +353,19 @@ def _run_pipeline(config: "object") -> Path:
         console=console,
         transient=True,
     ) as progress:
-        # Step 1: Walk
+        # Step 1: Walk (supports multi-root)
         task = progress.add_task("Discovering files...", total=None)
-        files = walk(config.root, config.extra_ignore, output_file=config.output_file)
+
+        if len(config.roots) > 1:
+            files_by_root = walk_multi(
+                config.roots, config.extra_ignore, output_file=config.output_file
+            )
+            files: list[Path] = []
+            for root_files in files_by_root.values():
+                files.extend(root_files)
+        else:
+            files = walk(config.root, config.extra_ignore, output_file=config.output_file)
+
         progress.update(task, description=f"Found {len(files)} files")
 
         # Step 1.5: Safety check
@@ -278,9 +378,35 @@ def _run_pipeline(config: "object") -> Path:
                 files = [f for f in files if f not in sensitive_set]
             progress.start()
 
-        # Step 2: Parse
+        # Step 2: Parse (cache-aware)
         progress.update(task, description="Parsing files...")
-        parse_results = parse_files(files)
+        cache = Cache(config.root)
+
+        parse_results = {}
+        uncached_files: list[Path] = []
+
+        for f in files:
+            try:
+                fhash = hashlib.sha256(f.read_bytes()).hexdigest()
+            except OSError:
+                fhash = ""
+
+            cached = cache.get_parse_result(f, fhash)
+            if cached is not None:
+                parse_results[f] = cached
+            else:
+                uncached_files.append(f)
+
+        # Batch-parse uncached files
+        if uncached_files:
+            fresh = parse_files(uncached_files)
+            for f, result in fresh.items():
+                parse_results[f] = result
+                try:
+                    fhash = hashlib.sha256(f.read_bytes()).hexdigest()
+                except OSError:
+                    fhash = ""
+                cache.put_parse_result(f, fhash, result)
 
         # Step 3: Build dependency graph
         progress.update(task, description="Building dependency graph...")
@@ -289,12 +415,37 @@ def _run_pipeline(config: "object") -> Path:
         # Step 4: Collect git metadata + score
         progress.update(task, description="Scoring files...")
         git_meta = collect_git_metadata(files, config.root, config.no_git)
-        scores = score_files(files, dep_graph, git_meta)
+
+        # Optional: semantic scoring via --query
+        sem_scores: dict[Path, float] | None = None
+        if config.query:
+            try:
+                from codectx.ranker.semantic import is_available, semantic_score
+
+                if is_available():
+                    progress.update(task, description="Computing semantic relevance...")
+                    cache_dir = config.root / CACHE_DIR_NAME
+                    cache_dir.mkdir(exist_ok=True)
+                    sem_scores = semantic_score(
+                        config.query, files, parse_results, cache_dir
+                    )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).debug(
+                    "Semantic scoring skipped: %s", exc
+                )
+
+        scores = score_files(files, dep_graph, git_meta, semantic_scores=sem_scores)
 
         # Step 5: Compress
         progress.update(task, description="Compressing to token budget...")
         budget = TokenBudget(config.token_budget)
-        compressed = compress_files(parse_results, scores, budget, config.root)
+        compressed = compress_files(
+            parse_results, scores, budget, config.root,
+            llm_enabled=config.llm_enabled,
+            llm_provider=config.llm_provider,
+            llm_model=config.llm_model,
+        )
 
         # Step 6: Format and write
         progress.update(task, description="Writing output...")
@@ -311,10 +462,14 @@ def _run_pipeline(config: "object") -> Path:
             root=config.root,
             budget=budget,
             architecture_text=arch_text,
+            roots=config.roots if len(config.roots) > 1 else None,
         )
 
         output_path = config.root / config.output_file
         write_context_file(content, output_path)
+
+        # Step 7: Persist cache
+        cache.save()
 
         progress.update(task, description="Done!")
 

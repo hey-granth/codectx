@@ -47,6 +47,9 @@ def compress_files(
     scores: dict[Path, float],
     budget: TokenBudget,
     root: Path,
+    llm_enabled: bool = False,
+    llm_provider: str = "openai",
+    llm_model: str = "",
 ) -> list[CompressedFile]:
     """Compress files into tiered content within the token budget.
 
@@ -128,11 +131,35 @@ def compress_files(
                 ))
 
     # Process Tier 3 — one-line summaries (dropped first on overflow)
+    # Pre-compute LLM summaries if enabled
+    llm_summaries: dict[Path, str] = {}
+    if llm_enabled and tier3:
+        try:
+            from codectx.compressor.summarizer import is_available, summarize_files_batch
+
+            if is_available():
+                tier3_results = [parse_results[p] for p in tier3]
+                llm_summaries = summarize_files_batch(
+                    tier3_results, llm_provider, llm_model
+                )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug(
+                "LLM summarization failed, using heuristic: %s", exc
+            )
+
     for path in tier3:
         if budget.is_exhausted:
             break
         pr = parse_results[path]
-        content = _tier3_content(pr, path, root)
+
+        # Use LLM summary if available, otherwise heuristic
+        if path in llm_summaries and llm_summaries[path]:
+            rel = path.relative_to(root).as_posix()
+            content = f"- `{rel}` — {llm_summaries[path]}\n"
+        else:
+            content = _tier3_content(pr, path, root)
+
         tokens = count_tokens(content)
 
         if budget.remaining >= tokens:

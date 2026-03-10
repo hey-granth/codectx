@@ -44,6 +44,7 @@ WEIGHT_GIT_FREQUENCY: float = 0.35
 WEIGHT_FAN_IN: float = 0.35
 WEIGHT_RECENCY: float = 0.20
 WEIGHT_ENTRY_PROXIMITY: float = 0.10
+CYCLE_PENALTY: float = 0.10
 
 # ---------------------------------------------------------------------------
 # Tier thresholds

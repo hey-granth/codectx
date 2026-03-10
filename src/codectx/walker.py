@@ -76,3 +76,51 @@ def _is_binary(path: Path) -> bool:
         return b"\x00" in chunk
     except (OSError, IOError):
         return True  # treat unreadable files as binary
+
+
+# ---------------------------------------------------------------------------
+# Multi-root support
+# ---------------------------------------------------------------------------
+
+
+def walk_multi(
+    roots: list[Path],
+    extra_ignore: tuple[str, ...] = (),
+    output_file: Path | None = None,
+) -> dict[Path, list[Path]]:
+    """Walk multiple roots independently, returning files grouped by root.
+
+    Args:
+        roots: List of repository root directories.
+        extra_ignore: Additional ignore patterns from config.
+        output_file: Output file to exclude from results.
+
+    Returns:
+        Dict mapping each root to sorted list of absolute file paths.
+    """
+    result: dict[Path, list[Path]] = {}
+    for root in roots:
+        root = root.resolve()
+        files = walk(root, extra_ignore, output_file)
+        result[root] = files
+    return result
+
+
+def find_root(file_path: Path, roots: list[Path]) -> Path | None:
+    """Determine which root a file belongs to.
+
+    Args:
+        file_path: Absolute path to a file.
+        roots: List of root directories.
+
+    Returns:
+        The root the file belongs to, or None if not under any root.
+    """
+    for root in sorted(roots, key=lambda r: len(str(r)), reverse=True):
+        try:
+            file_path.relative_to(root)
+            return root
+        except ValueError:
+            continue
+    return None
+

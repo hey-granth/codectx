@@ -42,6 +42,60 @@ def resolve_import(
     return []
 
 
+def resolve_import_multi_root(
+    import_text: str,
+    language: str,
+    source_file: Path,
+    roots: list[Path],
+    all_files_by_root: dict[Path, frozenset[str]],
+) -> list[Path]:
+    """Resolve an import trying the source file's root first, then others.
+
+    Args:
+        import_text: Raw import string from the AST.
+        language: Language name.
+        source_file: Absolute path of the file containing the import.
+        roots: All root directories.
+        all_files_by_root: Map of root → set of relative file paths.
+
+    Returns:
+        List of resolved file paths.
+    """
+    # Determine source root
+    source_root: Path | None = None
+    for r in roots:
+        try:
+            source_file.relative_to(r)
+            source_root = r
+            break
+        except ValueError:
+            continue
+
+    if source_root is None:
+        return []
+
+    # Try source root first
+    results = resolve_import(
+        import_text, language, source_file, source_root,
+        all_files_by_root.get(source_root, frozenset()),
+    )
+    if results:
+        return results
+
+    # Try other roots
+    for r in roots:
+        if r == source_root:
+            continue
+        other_results = resolve_import(
+            import_text, language, source_file, r,
+            all_files_by_root.get(r, frozenset()),
+        )
+        if other_results:
+            return other_results
+
+    return []
+
+
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------

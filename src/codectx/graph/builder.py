@@ -23,6 +23,7 @@ class DepGraph:
     graph: rustworkx.PyDiGraph = field(default_factory=rustworkx.PyDiGraph)
     path_to_idx: dict[Path, int] = field(default_factory=dict)
     idx_to_path: dict[int, Path] = field(default_factory=dict)
+    cycles: list[list[Path]] = field(default_factory=list)
 
     def add_file(self, path: Path) -> int:
         """Add a file node, returning its index."""
@@ -131,6 +132,14 @@ class DepGraph:
         return distances
 
     @property
+    def cyclic_files(self) -> set[Path]:
+        """Return set of all files participating in at least one cycle."""
+        result: set[Path] = set()
+        for cycle in self.cycles:
+            result.update(cycle)
+        return result
+
+    @property
     def node_count(self) -> int:
         return len(self.path_to_idx)
 
@@ -177,9 +186,29 @@ def build_dependency_graph(
                 if target != path:  # no self-edges
                     graph.add_edge(path, target)
 
+    # Detect cycles
+    try:
+        cycle_edges = rustworkx.digraph_find_cycle(graph.graph)
+        if cycle_edges:
+            # cycle_edges is a list of (source_idx, target_idx) tuples
+            # Group them into a single cycle path
+            cycle_nodes: list[Path] = []
+            seen: set[int] = set()
+            for src_idx, _tgt_idx in cycle_edges:
+                if src_idx not in seen:
+                    seen.add(src_idx)
+                    p = graph.idx_to_path.get(src_idx)
+                    if p is not None:
+                        cycle_nodes.append(p)
+            if cycle_nodes:
+                graph.cycles.append(cycle_nodes)
+    except Exception as exc:
+        logger.debug("Cycle detection failed: %s", exc)
+
     logger.info(
-        "Dependency graph: %d nodes, %d edges",
+        "Dependency graph: %d nodes, %d edges, %d cycles",
         graph.node_count,
         graph.edge_count,
+        len(graph.cycles),
     )
     return graph

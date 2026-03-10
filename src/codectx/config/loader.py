@@ -32,6 +32,11 @@ class Config:
     verbose: bool = False
     no_git: bool = False
     watch: bool = False
+    llm_enabled: bool = False
+    llm_provider: str = "openai"
+    llm_model: str = ""
+    query: str = ""
+    roots: list[Path] = field(default_factory=list)
     extra_ignore: tuple[str, ...] = field(default_factory=tuple)
 
     @property
@@ -74,6 +79,23 @@ def load_config(root: Path, **cli_overrides: object) -> Config:
     merged["verbose"] = bool(_resolve("verbose", cli_overrides, file_config, False))
     merged["no_git"] = bool(_resolve("no_git", cli_overrides, file_config, False))
     merged["watch"] = bool(_resolve("watch", cli_overrides, file_config, False))
+    merged["llm_enabled"] = bool(_resolve("llm_enabled", cli_overrides, file_config, False))
+    merged["llm_provider"] = str(_resolve("llm_provider", cli_overrides, file_config, "openai"))
+    merged["llm_model"] = str(_resolve("llm_model", cli_overrides, file_config, ""))
+    merged["query"] = str(_resolve("query", cli_overrides, file_config, ""))
+
+    # Roots: from config or CLI overrides, defaults to [root]
+    roots_raw = _resolve("roots", cli_overrides, file_config, None)
+    if roots_raw and isinstance(roots_raw, (list, tuple)):
+        resolved_roots = [Path(r).resolve() for r in roots_raw]
+        merged["roots"] = resolved_roots
+        # For multi-root, use common parent as the effective root
+        if len(resolved_roots) > 1:
+            import os
+            common = Path(os.path.commonpath([str(r) for r in resolved_roots]))
+            merged["root"] = common
+    else:
+        merged["roots"] = [root.resolve()]
 
     extra_ignore_raw = _resolve("extra_ignore", cli_overrides, file_config, ())
     if isinstance(extra_ignore_raw, (list, tuple)):

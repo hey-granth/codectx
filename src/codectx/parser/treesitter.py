@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,107 @@ from codectx.parser.languages import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Query file loading
+# ---------------------------------------------------------------------------
+
+QUERIES_DIR = Path(__file__).parent / "queries"
+
+
+def _parse_scm_patterns(text: str) -> list[tuple[str, str]]:
+    """Parse S-expression (.scm) text into (node_type, capture_name) pairs.
+
+    Handles nested parentheses like:
+        (function_definition name: (identifier) @name) @function
+    Returns the *outermost* node_type with its trailing @capture.
+    """
+    results: list[tuple[str, str]] = []
+    i = 0
+    while i < len(text):
+        if text[i] == "(":
+            # Find the node_type (first word after opening paren)
+            j = i + 1
+            while j < len(text) and text[j] == " ":
+                j += 1
+            k = j
+            while k < len(text) and text[k] not in (" ", ")", "\n"):
+                k += 1
+            node_type = text[j:k]
+
+            # Find matching closing paren (handle nesting)
+            depth = 1
+            m = i + 1
+            while m < len(text) and depth > 0:
+                if text[m] == "(":
+                    depth += 1
+                elif text[m] == ")":
+                    depth -= 1
+                m += 1
+
+            # After closing paren, look for @capture
+            while m < len(text) and text[m] in (" ", "\t"):
+                m += 1
+            if m < len(text) and text[m] == "@":
+                cap_start = m + 1
+                cap_end = cap_start
+                while cap_end < len(text) and text[cap_end].isalnum() or (cap_end < len(text) and text[cap_end] == "_"):
+                    cap_end += 1
+                capture = text[cap_start:cap_end]
+                if node_type and capture:
+                    results.append((node_type, capture))
+                i = cap_end
+            else:
+                i = m
+        else:
+            i += 1
+    return results
+
+
+@dataclass(frozen=True)
+class QuerySpec:
+    """Parsed query specification from a .scm file."""
+
+    import_types: frozenset[str]
+    function_types: frozenset[str]
+    class_types: frozenset[str]
+
+
+def _load_query_spec(language: str) -> QuerySpec | None:
+    """Load and parse a .scm query file for the given language."""
+    scm_path = QUERIES_DIR / f"{language}.scm"
+    if not scm_path.is_file():
+        return None
+
+    text = scm_path.read_text(encoding="utf-8")
+    import_types: set[str] = set()
+    function_types: set[str] = set()
+    class_types: set[str] = set()
+
+    for node_type, capture in _parse_scm_patterns(text):
+        if capture in ("import", "from_import"):
+            import_types.add(node_type)
+        elif capture in ("function", "method"):
+            function_types.add(node_type)
+        elif capture == "class":
+            class_types.add(node_type)
+
+    return QuerySpec(
+        import_types=frozenset(import_types),
+        function_types=frozenset(function_types),
+        class_types=frozenset(class_types),
+    )
+
+
+# Module-level cache of loaded query specs
+_query_cache: dict[str, QuerySpec | None] = {}
+
+
+def _get_query_spec(language: str) -> QuerySpec | None:
+    """Get cached QuerySpec for a language."""
+    if language not in _query_cache:
+        _query_cache[language] = _load_query_spec(language)
+    return _query_cache[language]
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -120,28 +223,18 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
 
 
 def _extract_imports(node: Any, language: str, source: str) -> list[str]:
-    """Extract import strings from the AST."""
-    imports: list[str] = []
+    """Extract import strings from the AST.
 
-    if language == "python":
+    Uses .scm query spec (data-driven) if available, otherwise falls back
+    to manual per-language logic for c, cpp, ruby.
+    """
+    imports: list[str] = []
+    spec = _get_query_spec(language)
+
+    if spec is not None and spec.import_types:
+        # Data-driven: walk tree and match node types from .scm spec
         for child in _walk_tree(node):
-            if child.type in ("import_statement", "import_from_statement"):
-                imports.append(_node_text(child, source))
-    elif language in ("javascript", "typescript"):
-        for child in _walk_tree(node):
-            if child.type in ("import_statement", "import_declaration"):
-                imports.append(_node_text(child, source))
-    elif language == "go":
-        for child in _walk_tree(node):
-            if child.type in ("import_declaration", "import_spec"):
-                imports.append(_node_text(child, source))
-    elif language == "rust":
-        for child in _walk_tree(node):
-            if child.type == "use_declaration":
-                imports.append(_node_text(child, source))
-    elif language == "java":
-        for child in _walk_tree(node):
-            if child.type == "import_declaration":
+            if child.type in spec.import_types:
                 imports.append(_node_text(child, source))
     elif language in ("c", "cpp"):
         for child in _walk_tree(node):

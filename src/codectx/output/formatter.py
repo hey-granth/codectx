@@ -18,6 +18,19 @@ from codectx.output.sections import (
 )
 
 
+def _root_label(file_path: Path, roots: list[Path] | None) -> str:
+    """Return a root label prefix if multi-root, else empty string."""
+    if not roots or len(roots) <= 1:
+        return ""
+    for r in roots:
+        try:
+            file_path.relative_to(r)
+            return f"[{r.name}] "
+        except ValueError:
+            continue
+    return ""
+
+
 def format_context(
     compressed: list[CompressedFile],
     dep_graph: DepGraph,
@@ -25,6 +38,7 @@ def format_context(
     budget: TokenBudget,
     architecture_text: str = "",
     recent_changes: str = "",
+    roots: list[Path] | None = None,
 ) -> str:
     """Assemble the full CONTEXT.md content.
 
@@ -44,6 +58,17 @@ def format_context(
     # --- DEPENDENCY_GRAPH ---
     graph_section = _section_header(DEPENDENCY_GRAPH.title)
     graph_section += _render_mermaid_graph(dep_graph, root, compressed)
+
+    # Cyclic dependencies subsection
+    if dep_graph.cycles:
+        graph_section += "### Cyclic Dependencies\n\n"
+        graph_section += "> [!WARNING]\n> The following circular import chains were detected:\n\n"
+        for i, cycle in enumerate(dep_graph.cycles, 1):
+            rel_paths = [p.relative_to(root).as_posix() for p in cycle]
+            chain = " → ".join(f"`{r}`" for r in rel_paths)
+            graph_section += f"{i}. {chain}\n"
+        graph_section += "\n"
+
     graph_consumed = budget.consume_partial(graph_section)
     parts.append(graph_consumed)
 

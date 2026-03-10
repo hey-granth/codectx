@@ -45,6 +45,10 @@ llm = [
     "anthropic>=0.25",
     "openai>=1.0",
 ]
+semantic = [
+    "lancedb>=0.6",
+    "sentence-transformers>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
