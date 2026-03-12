@@ -12,6 +12,7 @@ from codectx.parser.base import ParseResult, Symbol
 def test_semantic_import_works() -> None:
     """Module should import without semantic deps installed."""
     from codectx.ranker.semantic import is_available
+
     result = is_available()
     assert isinstance(result, bool)
 

@@ -37,6 +37,7 @@ def dep_graph(sample_files: list[Path]) -> DepGraph:
 @pytest.fixture
 def git_meta(sample_files: list[Path]) -> dict[Path, GitFileInfo]:
     import time
+
     now = time.time()
     return {
         sample_files[0]: GitFileInfo(commit_count=50, last_modified_ts=now - 3600),

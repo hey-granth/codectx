@@ -164,9 +164,7 @@ def build_dependency_graph(
     graph = DepGraph()
 
     # Build set of all known files (POSIX paths relative to root)
-    all_files: frozenset[str] = frozenset(
-        p.relative_to(root).as_posix() for p in parse_results
-    )
+    all_files: frozenset[str] = frozenset(p.relative_to(root).as_posix() for p in parse_results)
 
     # Add all files as nodes first
     for path in parse_results:

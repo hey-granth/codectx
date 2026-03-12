@@ -24,6 +24,7 @@ def test_cache_dir_created_after_pipeline(sample_project: Path) -> None:
 
     # Import and run pipeline
     from codectx.cli import _run_pipeline
+
     _run_pipeline(config)
 
     cache_dir = sample_project / ".codectx_cache"
@@ -40,6 +41,7 @@ def test_cache_reuse_on_second_run(sample_project: Path) -> None:
     config = load_config(sample_project, no_git=True)
 
     from codectx.cli import _run_pipeline
+
     _run_pipeline(config)
 
     # Read cache after first run
@@ -62,6 +64,7 @@ def test_cache_invalidated_on_file_change(sample_project: Path) -> None:
     config = load_config(sample_project, no_git=True)
 
     from codectx.cli import _run_pipeline
+
     _run_pipeline(config)
 
     cache_file = sample_project / ".codectx_cache" / "cache.json"

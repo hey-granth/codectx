@@ -52,9 +52,7 @@ def test_round_trip(populated_cache: Path, tmp_path: Path) -> None:
     cache_file = fresh_root / ".codectx_cache" / "cache.json"
     assert cache_file.is_file()
 
-    original_data = json.loads(
-        (populated_cache / ".codectx_cache" / "cache.json").read_text()
-    )
+    original_data = json.loads((populated_cache / ".codectx_cache" / "cache.json").read_text())
     imported_data = json.loads(cache_file.read_text())
     assert len(imported_data) == len(original_data)
 

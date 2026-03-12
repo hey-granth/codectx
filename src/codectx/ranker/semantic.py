@@ -59,9 +59,7 @@ def semantic_score(
         ImportError: If lancedb or sentence-transformers not installed.
     """
     if not _HAS_LANCEDB:
-        raise ImportError(
-            "lancedb is not installed. Install with: pip install codectx[semantic]"
-        )
+        raise ImportError("lancedb is not installed. Install with: pip install codectx[semantic]")
     if not _HAS_SENTENCE_TRANSFORMERS:
         raise ImportError(
             "sentence-transformers is not installed. Install with: pip install codectx[semantic]"

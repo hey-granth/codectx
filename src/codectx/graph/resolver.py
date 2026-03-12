@@ -76,7 +76,10 @@ def resolve_import_multi_root(
 
     # Try source root first
     results = resolve_import(
-        import_text, language, source_file, source_root,
+        import_text,
+        language,
+        source_file,
+        source_root,
         all_files_by_root.get(source_root, frozenset()),
     )
     if results:
@@ -87,7 +90,10 @@ def resolve_import_multi_root(
         if r == source_root:
             continue
         other_results = resolve_import(
-            import_text, language, source_file, r,
+            import_text,
+            language,
+            source_file,
+            r,
             all_files_by_root.get(r, frozenset()),
         )
         if other_results:
@@ -100,14 +106,10 @@ def resolve_import_multi_root(
 # Python
 # ---------------------------------------------------------------------------
 
-_PYTHON_IMPORT_RE = re.compile(
-    r"(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))"
-)
+_PYTHON_IMPORT_RE = re.compile(r"(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))")
 
 
-def _resolve_python(
-    import_text: str, root: Path, all_files: frozenset[str]
-) -> list[Path]:
+def _resolve_python(import_text: str, root: Path, all_files: frozenset[str]) -> list[Path]:
     m = _PYTHON_IMPORT_RE.search(import_text)
     if not m:
         return []
@@ -169,9 +171,7 @@ def _resolve_js_ts(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_go(
-    import_text: str, root: Path, all_files: frozenset[str]
-) -> list[Path]:
+def _resolve_go(import_text: str, root: Path, all_files: frozenset[str]) -> list[Path]:
     # Go imports are package paths; we try to resolve them relative to root
     m = re.search(r'"([^"]+)"', import_text)
     if not m:
@@ -210,9 +210,7 @@ def _resolve_rust(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_java(
-    import_text: str, root: Path, all_files: frozenset[str]
-) -> list[Path]:
+def _resolve_java(import_text: str, root: Path, all_files: frozenset[str]) -> list[Path]:
     m = re.search(r"import\s+([\w.]+);", import_text)
     if not m:
         return []

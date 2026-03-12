@@ -43,6 +43,7 @@ def get_language(ext: str) -> LanguageEntry | None:
 def get_language_for_path(path: Any) -> LanguageEntry | None:
     """Return the LanguageEntry for a file path (uses suffix)."""
     from pathlib import Path as _Path
+
     p = _Path(path) if not isinstance(path, _Path) else path
     return get_language(p.suffix)
 

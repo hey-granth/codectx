@@ -34,10 +34,7 @@ def sample_project(tmp_path: Path) -> Path:
         '    """An unused function."""\n'
         "    pass\n"
     )
-    (pkg / "config.py").write_text(
-        "DEBUG = True\n"
-        "PORT = 8080\n"
-    )
+    (pkg / "config.py").write_text("DEBUG = True\nPORT = 8080\n")
 
     (tmp_path / ".gitignore").write_text("__pycache__/\n*.pyc\n")
     (tmp_path / "README.md").write_text("# My App\n\nA sample project.\n")

@@ -16,8 +16,14 @@ def sample_result(tmp_path: Path) -> ParseResult:
         language="python",
         imports=("import os", "from pathlib import Path"),
         symbols=(
-            Symbol(name="main", kind="function", signature="def main()",
-                   docstring="Entry point.", start_line=1, end_line=5),
+            Symbol(
+                name="main",
+                kind="function",
+                signature="def main()",
+                docstring="Entry point.",
+                start_line=1,
+                end_line=5,
+            ),
         ),
         docstrings=("Example module.",),
         raw_source="import os\ndef main(): pass\n",
@@ -28,6 +34,7 @@ def sample_result(tmp_path: Path) -> ParseResult:
 def test_summarizer_import_works() -> None:
     """Module should import without LLM deps installed."""
     from codectx.compressor.summarizer import is_available
+
     # Should not raise, just return bool
     result = is_available()
     assert isinstance(result, bool)
@@ -53,7 +60,10 @@ def test_compress_files_fallback_without_llm(sample_result: ParseResult) -> None
 
     # Should NOT raise even with llm_enabled=True when deps aren't available
     compressed = compress_files(
-        parse_results, scores, budget, sample_result.path.parent,
+        parse_results,
+        scores,
+        budget,
+        sample_result.path.parent,
         llm_enabled=True,
     )
     assert len(compressed) == 1

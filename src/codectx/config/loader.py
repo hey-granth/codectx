@@ -42,6 +42,7 @@ class Config:
     @property
     def cache_dir(self) -> Path:
         from codectx.config.defaults import CACHE_DIR_NAME
+
         return self.root / CACHE_DIR_NAME
 
 
@@ -92,6 +93,7 @@ def load_config(root: Path, **cli_overrides: object) -> Config:
         # For multi-root, use common parent as the effective root
         if len(resolved_roots) > 1:
             import os
+
             common = Path(os.path.commonpath([str(r) for r in resolved_roots]))
             merged["root"] = common
     else:

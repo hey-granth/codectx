@@ -30,7 +30,11 @@ def walk(
     # Resolve output file path for exclusion
     excluded: Path | None = None
     if output_file is not None:
-        excluded = (root / output_file).resolve() if not output_file.is_absolute() else output_file.resolve()
+        excluded = (
+            (root / output_file).resolve()
+            if not output_file.is_absolute()
+            else output_file.resolve()
+        )
 
     # Collect candidates (avoids descending into ignored directories)
     candidates: list[Path] = []
@@ -123,4 +127,3 @@ def find_root(file_path: Path, roots: list[Path]) -> Path | None:
         except ValueError:
             continue
     return None
-

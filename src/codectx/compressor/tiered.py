@@ -93,19 +93,30 @@ def compress_files(
 
         if budget.remaining >= tokens:
             budget.consume(tokens)
-            result.append(CompressedFile(
-                path=path, tier=1, score=scores.get(path, 0.0),
-                content=content, token_count=tokens, language=pr.language,
-            ))
+            result.append(
+                CompressedFile(
+                    path=path,
+                    tier=1,
+                    score=scores.get(path, 0.0),
+                    content=content,
+                    token_count=tokens,
+                    language=pr.language,
+                )
+            )
         else:
             # Truncate Tier 1 to fit
             truncated = budget.consume_partial(content)
             if truncated:
-                result.append(CompressedFile(
-                    path=path, tier=1, score=scores.get(path, 0.0),
-                    content=truncated, token_count=count_tokens(truncated),
-                    language=pr.language,
-                ))
+                result.append(
+                    CompressedFile(
+                        path=path,
+                        tier=1,
+                        score=scores.get(path, 0.0),
+                        content=truncated,
+                        token_count=count_tokens(truncated),
+                        language=pr.language,
+                    )
+                )
 
     # Process Tier 2 — signatures + docstrings
     for path in tier2:
@@ -117,18 +128,29 @@ def compress_files(
 
         if budget.remaining >= tokens:
             budget.consume(tokens)
-            result.append(CompressedFile(
-                path=path, tier=2, score=scores.get(path, 0.0),
-                content=content, token_count=tokens, language=pr.language,
-            ))
+            result.append(
+                CompressedFile(
+                    path=path,
+                    tier=2,
+                    score=scores.get(path, 0.0),
+                    content=content,
+                    token_count=tokens,
+                    language=pr.language,
+                )
+            )
         else:
             truncated = budget.consume_partial(content)
             if truncated:
-                result.append(CompressedFile(
-                    path=path, tier=2, score=scores.get(path, 0.0),
-                    content=truncated, token_count=count_tokens(truncated),
-                    language=pr.language,
-                ))
+                result.append(
+                    CompressedFile(
+                        path=path,
+                        tier=2,
+                        score=scores.get(path, 0.0),
+                        content=truncated,
+                        token_count=count_tokens(truncated),
+                        language=pr.language,
+                    )
+                )
 
     # Process Tier 3 — one-line summaries (dropped first on overflow)
     # Pre-compute LLM summaries if enabled
@@ -139,14 +161,11 @@ def compress_files(
 
             if is_available():
                 tier3_results = [parse_results[p] for p in tier3]
-                llm_summaries = summarize_files_batch(
-                    tier3_results, llm_provider, llm_model
-                )
+                llm_summaries = summarize_files_batch(tier3_results, llm_provider, llm_model)
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).debug(
-                "LLM summarization failed, using heuristic: %s", exc
-            )
+
+            logging.getLogger(__name__).debug("LLM summarization failed, using heuristic: %s", exc)
 
     for path in tier3:
         if budget.is_exhausted:
@@ -164,10 +183,16 @@ def compress_files(
 
         if budget.remaining >= tokens:
             budget.consume(tokens)
-            result.append(CompressedFile(
-                path=path, tier=3, score=scores.get(path, 0.0),
-                content=content, token_count=tokens, language=pr.language,
-            ))
+            result.append(
+                CompressedFile(
+                    path=path,
+                    tier=3,
+                    score=scores.get(path, 0.0),
+                    content=content,
+                    token_count=tokens,
+                    language=pr.language,
+                )
+            )
         # Tier 3 files are simply dropped if they don't fit
 
     # Sort result for deterministic output: tier → score desc → path

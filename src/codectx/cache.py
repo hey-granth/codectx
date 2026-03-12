@@ -54,7 +54,8 @@ class Cache:
 
         try:
             symbols = tuple(
-                Symbol(**s) for s in entry.get("symbols", [])  # type: ignore[arg-type]
+                Symbol(**s)
+                for s in entry.get("symbols", [])  # type: ignore[arg-type]
             )
             return ParseResult(
                 path=Path(entry["path"]),  # type: ignore[arg-type]

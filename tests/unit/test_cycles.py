@@ -46,7 +46,9 @@ def test_cycle_detected(cyclic_parse_results: dict[Path, ParseResult], tmp_path:
     assert len(dep_graph.cycles) > 0, "No cycles detected"
 
 
-def test_cyclic_files_property(cyclic_parse_results: dict[Path, ParseResult], tmp_path: Path) -> None:
+def test_cyclic_files_property(
+    cyclic_parse_results: dict[Path, ParseResult], tmp_path: Path
+) -> None:
     """cyclic_files should contain both a.py and b.py."""
     dep_graph = build_dependency_graph(cyclic_parse_results, tmp_path)
     cyclic = dep_graph.cyclic_files
@@ -85,7 +87,9 @@ def test_no_cycles_in_acyclic_graph(tmp_path: Path) -> None:
     assert len(dep_graph.cycles) == 0
 
 
-def test_cycle_penalty_in_scorer(cyclic_parse_results: dict[Path, ParseResult], tmp_path: Path) -> None:
+def test_cycle_penalty_in_scorer(
+    cyclic_parse_results: dict[Path, ParseResult], tmp_path: Path
+) -> None:
     """Files in cycles should receive a score penalty."""
     from codectx.ranker.git_meta import GitFileInfo
     from codectx.ranker.scorer import score_files

@@ -64,7 +64,11 @@ def _parse_scm_patterns(text: str) -> list[tuple[str, str]]:
             if m < len(text) and text[m] == "@":
                 cap_start = m + 1
                 cap_end = cap_start
-                while cap_end < len(text) and text[cap_end].isalnum() or (cap_end < len(text) and text[cap_end] == "_"):
+                while (
+                    cap_end < len(text)
+                    and text[cap_end].isalnum()
+                    or (cap_end < len(text) and text[cap_end] == "_")
+                ):
                     cap_end += 1
                 capture = text[cap_start:cap_end]
                 if node_type and capture:
@@ -121,6 +125,7 @@ def _get_query_spec(language: str) -> QuerySpec | None:
     if language not in _query_cache:
         _query_cache[language] = _load_query_spec(language)
     return _query_cache[language]
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -465,14 +470,16 @@ def _maybe_js_arrow(node: Any, source: str, symbols: list[Symbol]) -> None:
         if child.type == "identifier":
             name = _node_text(child, source)
         elif child.type in ("arrow_function", "function"):
-            symbols.append(Symbol(
-                name=name or "<anonymous>",
-                kind="function",
-                signature=f"const {name} = ...",
-                docstring="",
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-            ))
+            symbols.append(
+                Symbol(
+                    name=name or "<anonymous>",
+                    kind="function",
+                    signature=f"const {name} = ...",
+                    docstring="",
+                    start_line=node.start_point[0] + 1,
+                    end_line=node.end_point[0] + 1,
+                )
+            )
             return
 
 
@@ -531,7 +538,7 @@ def _walk_tree(node: Any) -> list[Any]:
 
 def _node_text(node: Any, source: str) -> str:
     """Get the source text for a tree-sitter node."""
-    return source[node.start_byte:node.end_byte]
+    return source[node.start_byte : node.end_byte]
 
 
 def _find_child(node: Any, child_type: str) -> Any | None:
@@ -552,7 +559,7 @@ def _extract_first_docstring(body_node: Any, source: str) -> str:
                     # Strip triple-quotes
                     for q in ('"""', "'''", '"', "'"):
                         if text.startswith(q) and text.endswith(q):
-                            text = text[len(q):-len(q)]
+                            text = text[len(q) : -len(q)]
                             break
                     return text.strip()
             break

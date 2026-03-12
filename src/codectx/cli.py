@@ -102,8 +102,7 @@ def analyze(
 
     console.print(
         Panel(
-            f"[bold green]✓[/] Context written to [bold]{result_path}[/]\n"
-            f"  Time: {elapsed:.2f}s",
+            f"[bold green]✓[/] Context written to [bold]{result_path}[/]\n  Time: {elapsed:.2f}s",
             title="codectx",
             border_style="green",
         )
@@ -142,18 +141,21 @@ def benchmark(
     # Walk
     t0 = time.perf_counter()
     from codectx.walker import walk
+
     files = walk(config.root, config.extra_ignore)
     timings["walk"] = time.perf_counter() - t0
 
     # Parse
     t0 = time.perf_counter()
     from codectx.parser.treesitter import parse_files
+
     parse_results = parse_files(files)
     timings["parse"] = time.perf_counter() - t0
 
     # Graph
     t0 = time.perf_counter()
     from codectx.graph.builder import build_dependency_graph
+
     dep_graph = build_dependency_graph(parse_results, config.root)
     timings["graph"] = time.perf_counter() - t0
 
@@ -161,6 +163,7 @@ def benchmark(
     t0 = time.perf_counter()
     from codectx.ranker.git_meta import collect_git_metadata
     from codectx.ranker.scorer import score_files
+
     git_meta = collect_git_metadata(files, config.root, config.no_git)
     scores = score_files(files, dep_graph, git_meta)
     timings["rank"] = time.perf_counter() - t0
@@ -169,27 +172,32 @@ def benchmark(
     t0 = time.perf_counter()
     from codectx.compressor.budget import TokenBudget
     from codectx.compressor.tiered import compress_files
+
     budget = TokenBudget(config.token_budget)
     compressed = compress_files(parse_results, scores, budget, config.root)
     timings["compress"] = time.perf_counter() - t0
 
     total = sum(timings.values())
 
-    console.print(Panel(
-        "\n".join([
-            f"[bold]Files discovered:[/] {len(files)}",
-            f"[bold]Files parsed:[/] {len(parse_results)}",
-            f"[bold]Graph nodes:[/] {dep_graph.node_count}",
-            f"[bold]Graph edges:[/] {dep_graph.edge_count}",
-            f"[bold]Compressed files:[/] {len(compressed)}",
-            f"[bold]Tokens used:[/] {budget.used:,} / {budget.total:,}",
-            "",
-            *[f"  {k:>10}: {v:.3f}s" for k, v in timings.items()],
-            f"  {'total':>10}: {total:.3f}s",
-        ]),
-        title="Benchmark Results",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(
+                [
+                    f"[bold]Files discovered:[/] {len(files)}",
+                    f"[bold]Files parsed:[/] {len(parse_results)}",
+                    f"[bold]Graph nodes:[/] {dep_graph.node_count}",
+                    f"[bold]Graph edges:[/] {dep_graph.edge_count}",
+                    f"[bold]Compressed files:[/] {len(compressed)}",
+                    f"[bold]Tokens used:[/] {budget.used:,} / {budget.total:,}",
+                    "",
+                    *[f"  {k:>10}: {v:.3f}s" for k, v in timings.items()],
+                    f"  {'total':>10}: {total:.3f}s",
+                ]
+            ),
+            title="Benchmark Results",
+            border_style="cyan",
+        )
+    )
 
 
 @app.command()
@@ -272,9 +280,7 @@ def cache_export(
     cache = Cache(root)
     try:
         cache.export_cache(output)
-        console.print(
-            f"[bold green]✓[/] Cache exported to [bold]{output}[/]"
-        )
+        console.print(f"[bold green]✓[/] Cache exported to [bold]{output}[/]")
     except FileNotFoundError as exc:
         console.print(f"[red]Error:[/] {exc}")
         raise typer.Exit(1)
@@ -301,9 +307,7 @@ def cache_import(
 
     try:
         Cache.import_cache(archive, root)
-        console.print(
-            f"[bold green]✓[/] Cache imported from [bold]{archive}[/]"
-        )
+        console.print(f"[bold green]✓[/] Cache imported from [bold]{archive}[/]")
     except FileNotFoundError as exc:
         console.print(f"[red]Error:[/] {exc}")
         raise typer.Exit(1)
@@ -426,14 +430,11 @@ def _run_pipeline(config: "object") -> Path:
                     progress.update(task, description="Computing semantic relevance...")
                     cache_dir = config.root / CACHE_DIR_NAME
                     cache_dir.mkdir(exist_ok=True)
-                    sem_scores = semantic_score(
-                        config.query, files, parse_results, cache_dir
-                    )
+                    sem_scores = semantic_score(config.query, files, parse_results, cache_dir)
             except Exception as exc:
                 import logging
-                logging.getLogger(__name__).debug(
-                    "Semantic scoring skipped: %s", exc
-                )
+
+                logging.getLogger(__name__).debug("Semantic scoring skipped: %s", exc)
 
         scores = score_files(files, dep_graph, git_meta, semantic_scores=sem_scores)
 
@@ -441,7 +442,10 @@ def _run_pipeline(config: "object") -> Path:
         progress.update(task, description="Compressing to token budget...")
         budget = TokenBudget(config.token_budget)
         compressed = compress_files(
-            parse_results, scores, budget, config.root,
+            parse_results,
+            scores,
+            budget,
+            config.root,
             llm_enabled=config.llm_enabled,
             llm_provider=config.llm_provider,
             llm_model=config.llm_model,

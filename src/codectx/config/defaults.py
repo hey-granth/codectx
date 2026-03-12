@@ -57,32 +57,34 @@ TIER2_THRESHOLD: float = 0.3
 # Entry-point filename patterns (basename matching)
 # ---------------------------------------------------------------------------
 
-ENTRYPOINT_FILENAMES: frozenset[str] = frozenset({
-    # Python
-    "main.py",
-    "__main__.py",
-    "app.py",
-    "cli.py",
-    "manage.py",
-    # JavaScript / TypeScript
-    "index.ts",
-    "index.js",
-    "index.tsx",
-    "index.jsx",
-    "server.ts",
-    "server.js",
-    # Go
-    "main.go",
-    # Rust
-    "main.rs",
-    "lib.rs",
-    # Java
-    "Main.java",
-    "Application.java",
-    # Ruby
-    "Rakefile",
-    "config.ru",
-})
+ENTRYPOINT_FILENAMES: frozenset[str] = frozenset(
+    {
+        # Python
+        "main.py",
+        "__main__.py",
+        "app.py",
+        "cli.py",
+        "manage.py",
+        # JavaScript / TypeScript
+        "index.ts",
+        "index.js",
+        "index.tsx",
+        "index.jsx",
+        "server.ts",
+        "server.js",
+        # Go
+        "main.go",
+        # Rust
+        "main.rs",
+        "lib.rs",
+        # Java
+        "Main.java",
+        "Application.java",
+        # Ruby
+        "Rakefile",
+        "config.ru",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Sensitive-file patterns (for safety.py warnings)
