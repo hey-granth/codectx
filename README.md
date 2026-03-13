@@ -27,15 +27,25 @@ The tool analyzes the repository, ranks files by importance, compresses code int
 
 ```bash
 codectx analyze .
-````
+```
 
-This analyzes the current repository and generates:
+This analyzes the current repository and generates a single structured context file:
 
 ```
 CONTEXT.md
 ```
 
-You can then provide this file to your AI coding agent as structured repository context.
+You can customize the analysis with advanced flags:
+
+```bash
+# Optimize context for a specific task (debug, feature, architecture)
+codectx analyze . --task debug
+
+# Generate multi-layer context files (REPO_MAP.md, CORE_CONTEXT.md)
+codectx analyze . --layers
+```
+
+You can then provide `CONTEXT.md` (or the layered files) to your AI coding agent as highly focused structured repository context.
 
 ---
 
@@ -120,9 +130,11 @@ Generates a structured `CONTEXT.md` optimized for AI agents.
 # Key Features
 
 * automatic repository analysis
-* dependency graph construction
-* importance ranking of modules
-* token-budget aware context generation
+* dependency graph and critical call path construction
+* semantic relevance scaling and search using `lancedb`
+* task-aware context weighting (debug, feature, architecture)
+* multi-layer context generation (`--layers`)
+* performance and budget telemetry
 * deterministic output
 * multi-language parsing
 
@@ -179,7 +191,17 @@ codectx analyze .
 codectx analyze .
 ```
 
-Generates `CONTEXT.md` for the current repository.
+Generates `CONTEXT.md` for the current repository. You can append `--task [debug|feature|architecture]` to adjust the ranking heuristics, or `--layers` to write separate files (`REPO_MAP.md`, `CORE_CONTEXT.md`) alongside the full context.
+
+---
+
+### Semantic Search
+
+```bash
+codectx search "authentication logic" --root .
+```
+
+Leverages `sentence-transformers` and `LanceDB` to find the most semantically relevant files for a natural language query, returning a ranked list with relevance scores.
 
 ---
 
@@ -209,11 +231,19 @@ The generated `CONTEXT.md` contains structured sections designed for AI reasonin
 
 ### ARCHITECTURE
 
-High-level project structure.
+High-level project structure and auto-generated description.
 
 ### ENTRY_POINTS
 
 Main execution paths and public interfaces.
+
+### SYMBOL_INDEX
+
+Comprehensive list of top-level code symbols (classes, functions, methods) to provide rapid overview.
+
+### IMPORTANT_CALL_PATHS
+
+Traces of critical execution paths starting from entry points deep into the dependency graph.
 
 ### CORE_MODULES
 
@@ -225,7 +255,7 @@ Compressed signatures and docstrings for secondary modules.
 
 ### DEPENDENCY_GRAPH
 
-Mermaid graph showing module relationships.
+Mermaid graph showing module relationships and cyclic dependency warnings.
 
 ### PERIPHERY
 

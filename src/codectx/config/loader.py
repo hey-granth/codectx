@@ -36,6 +36,8 @@ class Config:
     llm_provider: str = "openai"
     llm_model: str = ""
     query: str = ""
+    task: str = "default"
+    layers: bool = False
     roots: list[Path] = field(default_factory=list)
     extra_ignore: tuple[str, ...] = field(default_factory=tuple)
 
@@ -84,6 +86,8 @@ def load_config(root: Path, **cli_overrides: object) -> Config:
     merged["llm_provider"] = str(_resolve("llm_provider", cli_overrides, file_config, "openai"))
     merged["llm_model"] = str(_resolve("llm_model", cli_overrides, file_config, ""))
     merged["query"] = str(_resolve("query", cli_overrides, file_config, ""))
+    merged["task"] = str(_resolve("task", cli_overrides, file_config, "default"))
+    merged["layers"] = bool(_resolve("layers", cli_overrides, file_config, False))
 
     # Roots: from config or CLI overrides, defaults to [root]
     roots_raw = _resolve("roots", cli_overrides, file_config, None)

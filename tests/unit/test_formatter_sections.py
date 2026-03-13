@@ -26,9 +26,9 @@ def test_sections_always_present_in_order(tmp_path: Path) -> None:
         "## ENTRY_POINTS",
         "## CORE_MODULES",
         "## PERIPHERY",
-        "## RECENT_CHANGES",
     ]
-    positions = [content.index(h) for h in headers]
+    content_str = "".join(content.values())
+    positions = [content_str.index(h) for h in headers]
     assert positions == sorted(positions)
 
 
@@ -52,14 +52,12 @@ def test_formatter_is_deterministic_for_same_inputs(tmp_path: Path) -> None:
         dep_graph=graph,
         root=tmp_path,
         budget=TokenBudget(10_000),
-        recent_changes="",
     )
     out2 = format_context(
         compressed=[cf],
         dep_graph=graph,
         root=tmp_path,
         budget=TokenBudget(10_000),
-        recent_changes="",
     )
 
     assert out1 == out2

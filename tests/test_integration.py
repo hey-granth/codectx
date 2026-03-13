@@ -82,8 +82,9 @@ def test_full_pipeline(sample_project: Path) -> None:
         root=sample_project,
         budget=budget,
     )
-    assert "ARCHITECTURE" in content
-    assert "DEPENDENCY_GRAPH" in content
+    content_str = "".join(content.values())
+    assert "ARCHITECTURE" in content_str
+    assert "DEPENDENCY_GRAPH" in content_str
 
     # Write
     output_path = sample_project / "CONTEXT.md"

@@ -17,6 +17,8 @@ class Section:
 # Sections in output order
 ARCHITECTURE = Section(key="architecture", title="ARCHITECTURE")
 ENTRY_POINTS = Section(key="entry_points", title="ENTRY_POINTS")
+SYMBOL_INDEX = Section(key="symbol_index", title="SYMBOL_INDEX")
+IMPORTANT_CALL_PATHS = Section(key="important_call_paths", title="IMPORTANT_CALL_PATHS")
 CORE_MODULES = Section(key="core_modules", title="CORE_MODULES")
 SUPPORTING_MODULES = Section(key="supporting_modules", title="SUPPORTING_MODULES")
 DEPENDENCY_GRAPH = Section(key="dependency_graph", title="DEPENDENCY_GRAPH")
@@ -26,6 +28,8 @@ PERIPHERY = Section(key="periphery", title="PERIPHERY")
 SECTION_ORDER: tuple[Section, ...] = (
     ARCHITECTURE,
     ENTRY_POINTS,
+    SYMBOL_INDEX,
+    IMPORTANT_CALL_PATHS,
     CORE_MODULES,
     SUPPORTING_MODULES,
     DEPENDENCY_GRAPH,

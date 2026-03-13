@@ -470,9 +470,13 @@ def _python_class_symbol(node: Any, source: str) -> Symbol:
         elif child.type == "argument_list":
             bases = _node_text(child, source)
 
+    children = []
     body = _find_child(node, "body") or _find_child(node, "block")
     if body:
         docstring = _extract_first_docstring(body, source)
+        for sub in body.children:
+            if sub.type == "function_definition":
+                children.append(_python_func_symbol(sub, source, "method"))
 
     signature = f"class {name}{bases}" if bases else f"class {name}"
 
@@ -483,6 +487,7 @@ def _python_class_symbol(node: Any, source: str) -> Symbol:
         docstring=docstring,
         start_line=node.start_point[0] + 1,
         end_line=node.end_point[0] + 1,
+        children=tuple(children),
     )
 
 
@@ -511,6 +516,27 @@ def _js_class_symbol(node: Any, source: str) -> Symbol:
             name = _node_text(child, source)
             break
 
+    children = []
+    body = _find_child(node, "class_body")
+    if body:
+        for sub in body.children:
+            if sub.type == "method_definition":
+                mname = ""
+                for mchild in sub.children:
+                    if mchild.type == "property_identifier":
+                        mname = _node_text(mchild, source)
+                        break
+                if mname:
+                    first_line = _node_text(sub, source).split("\n")[0].rstrip(" {")
+                    children.append(Symbol(
+                        name=mname,
+                        kind="method",
+                        signature=first_line,
+                        docstring="",
+                        start_line=sub.start_point[0] + 1,
+                        end_line=sub.end_point[0] + 1,
+                    ))
+
     return Symbol(
         name=name or "<anonymous>",
         kind="class",
@@ -518,6 +544,7 @@ def _js_class_symbol(node: Any, source: str) -> Symbol:
         docstring="",
         start_line=node.start_point[0] + 1,
         end_line=node.end_point[0] + 1,
+        children=tuple(children),
     )
 
 

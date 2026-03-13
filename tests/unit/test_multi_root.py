@@ -69,9 +69,9 @@ def test_multi_root_pipeline(two_roots: tuple[Path, Path]) -> None:
         roots=[root_a, root_b],
     )
 
-    result_path = _run_pipeline(config)
-    assert result_path.exists()
+    result_metrics = _run_pipeline(config)
+    assert result_metrics.output_path.exists()
 
-    content = result_path.read_text()
+    content = result_metrics.output_path.read_text()
     # Should contain files from both roots
     assert "main.py" in content or "index.js" in content

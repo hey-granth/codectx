@@ -66,5 +66,5 @@ def test_pipeline_with_query_no_deps(tmp_path: Path) -> None:
     config = load_config(tmp_path, no_git=True, query="authentication")
 
     # Should NOT raise even without semantic deps
-    result = _run_pipeline(config)
-    assert result.exists()
+    result_metrics = _run_pipeline(config)
+    assert result_metrics.output_path.exists()

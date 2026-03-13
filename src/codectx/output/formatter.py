@@ -13,11 +13,14 @@ from codectx.output.sections import (
     CORE_MODULES,
     DEPENDENCY_GRAPH,
     ENTRY_POINTS,
+    SYMBOL_INDEX,
+    IMPORTANT_CALL_PATHS,
     CORE_MODULES,
     SUPPORTING_MODULES,
     PERIPHERY,
 )
 from codectx.config.defaults import ENTRYPOINT_FILENAMES
+from codectx.parser.base import ParseResult
 
 
 def _root_label(file_path: Path, roots: list[Path] | None) -> str:
@@ -40,12 +43,13 @@ def format_context(
     budget: TokenBudget,
     architecture_text: str = "",
     roots: list[Path] | None = None,
-) -> str:
+    parse_results: dict[Path, ParseResult] | None = None,
+) -> dict[str, str]:
     """Assemble the full CONTEXT.md content.
 
     Sections are emitted in the canonical order and consume the token budget.
     """
-    parts: list[str] = []
+    sections_out: dict[str, str] = {}
 
     # --- ARCHITECTURE ---
     arch_section = _section_header(ARCHITECTURE.title)
@@ -66,7 +70,7 @@ def format_context(
         arch_section += "\n\n(Architecture truncated. See ARCHITECTURE.md for details.)\n\n"
     else:
         arch_section += _auto_architecture(compressed, root) + "\n\n"
-    parts.append(budget.consume_partial(arch_section))
+    sections_out[ARCHITECTURE.key] = budget.consume_partial(arch_section)
 
     # --- DEPENDENCY_GRAPH ---
     graph_section = _section_header(DEPENDENCY_GRAPH.title)
@@ -84,7 +88,7 @@ def format_context(
             chain = " -> ".join(f"`{r}`" for r in rel_paths)
             graph_section += f"{i}. {chain}\n"
         graph_section += "\n"
-    parts.append(budget.consume_partial(graph_section))
+    sections_out[DEPENDENCY_GRAPH.key] = budget.consume_partial(graph_section)
 
     # --- ENTRY_POINTS & CORE_MODULES ---
     entry_files = []
@@ -102,7 +106,70 @@ def format_context(
             entry_section += cf.content + "\n"
     else:
         entry_section += "*No entry points identified within budget.*\n\n"
-    parts.append(budget.consume_partial(entry_section))
+    sections_out[ENTRY_POINTS.key] = budget.consume_partial(entry_section)
+
+    # --- SYMBOL_INDEX ---
+    symbol_section = _section_header(SYMBOL_INDEX.title)
+    if parse_results:
+        symbol_lines = []
+        count = 0
+        for cf in compressed:
+            if cf.tier in (1, 2) and cf.path in parse_results:
+                pr = parse_results[cf.path]
+                if pr.symbols:
+                    # Collect symbols
+                    for sym in pr.symbols:
+                        if count >= 100:
+                            break
+                        symbol_lines.append(sym.name)
+                        if getattr(sym, "children", None):
+                            for child in sym.children:
+                                symbol_lines.append(f"  {child.name}()")
+                        else:
+                            # if it's a function without children, just print it?
+                            if sym.kind in ("function", "method"):
+                                symbol_lines[-1] += "()"
+                        symbol_lines.append("")
+                        count += 1
+            if count >= 100:
+                break
+        
+        if symbol_lines:
+            symbol_section += "\n".join(symbol_lines)
+        else:
+            symbol_section += "*No symbols found within budget.*\n\n"
+    else:
+        symbol_section += "*No symbol data available.*\n\n"
+        
+    sections_out[SYMBOL_INDEX.key] = budget.consume_partial(symbol_section)
+
+    # --- IMPORTANT_CALL_PATHS ---
+    call_paths_section = _section_header(IMPORTANT_CALL_PATHS.title)
+    call_paths = dep_graph.detect_call_paths(max_depth=5)
+    
+    if call_paths and parse_results:
+        import_lines = []
+        for path in call_paths:
+            for i, node_path in enumerate(path):
+                pr = parse_results.get(node_path)
+                sym_name = node_path.stem
+                if pr and pr.symbols:
+                    # just take the first symbol as the main representative
+                    sym_name = f"{node_path.stem}.{pr.symbols[0].name}()"
+                elif pr and not pr.symbols:
+                    sym_name = f"{node_path.stem}()"
+
+                if i == 0:
+                    import_lines.append(sym_name)
+                else:
+                    import_lines.append(f"  → {sym_name}")
+            import_lines.append("")
+
+        call_paths_section += "\n".join(import_lines)
+    else:
+        call_paths_section += "*No call paths detected.*\n\n"
+
+    sections_out[IMPORTANT_CALL_PATHS.key] = budget.consume_partial(call_paths_section)
 
     core_section = _section_header(CORE_MODULES.title)
     if core_files:
@@ -110,7 +177,7 @@ def format_context(
             core_section += cf.content + "\n"
     else:
         core_section += "*No core modules selected within budget.*\n\n"
-    parts.append(budget.consume_partial(core_section))
+    sections_out[CORE_MODULES.key] = budget.consume_partial(core_section)
 
     # --- SUPPORTING_MODULES ---
     supporting_files = [cf for cf in compressed if cf.tier == 2]
@@ -120,7 +187,7 @@ def format_context(
             supp_section += cf.content + "\n"
     else:
         supp_section += "*No supporting modules selected within budget.*\n\n"
-    parts.append(budget.consume_partial(supp_section))
+    sections_out[SUPPORTING_MODULES.key] = budget.consume_partial(supp_section)
 
     # --- PERIPHERY ---
     periph_files = [cf for cf in compressed if cf.tier == 3]
@@ -131,14 +198,38 @@ def format_context(
         periph_section += "\n"
     else:
         periph_section += "*No periphery files selected within budget.*\n\n"
-    parts.append(budget.consume_partial(periph_section))
+    sections_out[PERIPHERY.key] = budget.consume_partial(periph_section)
 
-    return "".join(parts)
+    return sections_out
 
-
-def write_context_file(content: str, output_path: Path) -> None:
+def write_context_file(content: str | dict[str, str], output_path: Path) -> None:
     """Write the assembled context to disk."""
-    output_path.write_text(content, encoding="utf-8")
+    if isinstance(content, dict):
+        # preserve section order from output logic
+        content_str = "".join(content.values())
+    else:
+        content_str = content
+    output_path.write_text(content_str, encoding="utf-8")
+
+def write_layer_files(sections: dict[str, str], root: Path) -> None:
+    """Write REPO_MAP.md and CORE_CONTEXT.md according to the sections."""
+    repo_map_keys = [
+        ARCHITECTURE.key,
+        ENTRY_POINTS.key,
+        SYMBOL_INDEX.key,
+        IMPORTANT_CALL_PATHS.key,
+        DEPENDENCY_GRAPH.key,
+    ]
+    core_context_keys = [
+        CORE_MODULES.key,
+        SUPPORTING_MODULES.key,
+    ]
+    
+    repo_map_content = "".join(sections.get(k, "") for k in repo_map_keys)
+    core_context_content = "".join(sections.get(k, "") for k in core_context_keys)
+    
+    (root / "REPO_MAP.md").write_text(repo_map_content, encoding="utf-8")
+    (root / "CORE_CONTEXT.md").write_text(core_context_content, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

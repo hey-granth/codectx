@@ -69,6 +69,16 @@ def analyze(
         "-q",
         help="Semantic query to rank files by relevance (requires codectx[semantic]).",
     ),
+    task: str = typer.Option(
+        "default",
+        "--task",
+        help="Task profile for context generation (debug, feature, architecture, default).",
+    ),
+    layers: bool = typer.Option(
+        False,
+        "--layers",
+        help="Generate layered context output.",
+    ),
     extra_roots: Optional[list[Path]] = typer.Option(
         None,
         "--extra-root",
@@ -94,15 +104,24 @@ def analyze(
         verbose=verbose,
         no_git=no_git,
         query=query or "",
+        task=task,
+        layers=layers,
         roots=roots_list,
     )
 
-    result_path = _run_pipeline(config)
+    metrics = _run_pipeline(config)
     elapsed = time.perf_counter() - start_time
+
+    ratio = metrics.original_tokens / metrics.context_tokens if metrics.context_tokens > 0 else 0
 
     console.print(
         Panel(
-            f"[bold green]✓[/] Context written to [bold]{result_path}[/]\n  Time: {elapsed:.2f}s",
+            f"[bold green]✓[/] Context written to [bold]{metrics.output_path}[/]\n\n"
+            f"[bold]Files scanned:[/] {metrics.files_scanned:,}\n"
+            f"[bold]Original tokens:[/] {metrics.original_tokens:,}\n"
+            f"[bold]Context tokens:[/] {metrics.context_tokens:,}\n"
+            f"[bold]Compression ratio:[/] {ratio:.1f}x\n"
+            f"[bold]Analysis time:[/] {elapsed:.1f}s",
             title="codectx",
             border_style="green",
         )
@@ -250,6 +269,106 @@ def watch(
         console.print("\n[bold]Watch stopped.[/]")
 
 
+@app.command()
+def search(
+    query: str = typer.Argument(
+        ...,
+        help="Semantic search query.",
+    ),
+    root: Path = typer.Option(
+        ".",
+        "--root",
+        "-r",
+        help="Repository root directory.",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+    ),
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        "-l",
+        help="Number of results to return.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose logging.",
+    ),
+) -> None:
+    """Search the codebase semantically."""
+    _setup_logging(verbose)
+    
+    try:
+        from codectx.ranker.semantic import is_available, semantic_score
+        if not is_available():
+            console.print("[red]Semantic search is not installed. Run: pip install codectx[semantic][/]")
+            raise typer.Exit(1)
+            
+        from codectx.walker import walk
+        from codectx.parser.treesitter import parse_files
+        from codectx.config.loader import load_config
+        import hashlib
+        from codectx.cache import Cache
+        
+        config = load_config(root)
+        files = walk(config.root, config.extra_ignore)
+        
+        # Parse files with cache
+        cache = Cache(config.root)
+        parse_results = {}
+        uncached_files: list[Path] = []
+        for f in files:
+            try:
+                fhash = hashlib.sha256(f.read_bytes()).hexdigest()
+            except OSError:
+                fhash = ""
+            cached = cache.get_parse_result(f, fhash)
+            if cached is not None:
+                parse_results[f] = cached
+            else:
+                uncached_files.append(f)
+        
+        if uncached_files:
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+                progress.add_task("Parsing uncached files...", total=None)
+                fresh = parse_files(uncached_files)
+                for f, result in fresh.items():
+                    parse_results[f] = result
+                    try:
+                        fhash = hashlib.sha256(f.read_bytes()).hexdigest()
+                    except OSError:
+                        fhash = ""
+                    cache.put_parse_result(f, fhash, result)
+            cache.save()
+        
+        cache_dir = config.root / ".codectx_cache" / "embeddings"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+            progress.add_task("Computing semantic relevance...", total=None)
+            scores = semantic_score(query, files, parse_results, cache_dir)
+            
+        sorted_files = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        
+        console.print(f"\n[bold cyan]Search Results for:[/] '{query}'\n")
+        
+        found = False
+        for f, score in sorted_files[:limit]:
+            if score > 0.0:
+                rel = f.relative_to(config.root)
+                console.print(f"[bold green]{rel}[/] (score: {score:.3f})")
+                found = True
+                
+        if not found:
+            console.print("[yellow]No relevant files found.[/]")
+            
+    except Exception as exc:
+        console.print(f"[red]Error during search:[/] {exc}")
+        raise typer.Exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Cache commands
 # ---------------------------------------------------------------------------
@@ -332,9 +451,17 @@ def main(
 # Pipeline runner
 # ---------------------------------------------------------------------------
 
+from dataclasses import dataclass
 
-def _run_pipeline(config: "object") -> Path:
-    """Run the full codectx pipeline and return the output file path."""
+@dataclass
+class PipelineMetrics:
+    output_path: Path
+    files_scanned: int
+    original_tokens: int
+    context_tokens: int
+
+def _run_pipeline(config: "object") -> PipelineMetrics:
+    """Run the full codectx pipeline and return the output metrics."""
     import hashlib
 
     from codectx.cache import Cache
@@ -437,7 +564,14 @@ def _run_pipeline(config: "object") -> Path:
 
                 logging.getLogger(__name__).debug("Semantic scoring skipped: %s", exc)
 
-        scores = score_files(files, dep_graph, git_meta, semantic_scores=sem_scores)
+        scores = score_files(
+            files,
+            dep_graph,
+            git_meta,
+            semantic_scores=sem_scores,
+            task=config.task,
+            parse_results=parse_results,
+        )
 
         # Step 5: Compress
         progress.update(task, description="Compressing to token budget...")
@@ -461,24 +595,39 @@ def _run_pipeline(config: "object") -> Path:
         if arch_file.is_file():
             arch_text = arch_file.read_text(encoding="utf-8", errors="replace")
 
-        content = format_context(
+        content_sections = format_context(
             compressed=compressed,
             dep_graph=dep_graph,
             root=config.root,
             budget=budget,
             architecture_text=arch_text,
             roots=config.roots if len(config.roots) > 1 else None,
+            parse_results=parse_results,
         )
 
-        output_path = config.root / config.output_file
-        write_context_file(content, output_path)
+        if config.layers:
+            from codectx.output.formatter import write_layer_files
+            write_layer_files(content_sections, config.root)
+            output_path = config.root / "FULL_CONTEXT.md"
+            write_context_file(content_sections, output_path)
+        else:
+            output_path = config.root / config.output_file
+            write_context_file(content_sections, output_path)
 
         # Step 7: Persist cache
         cache.save()
 
         progress.update(task, description="Done!")
 
-    return output_path
+    from codectx.compressor.budget import count_tokens
+    original_tokens = sum(count_tokens(pr.raw_source) for pr in parse_results.values() if pr)
+
+    return PipelineMetrics(
+        output_path=output_path,
+        files_scanned=len(files),
+        original_tokens=original_tokens,
+        context_tokens=sum(cf.token_count for cf in compressed),
+    )
 
 
 def _setup_logging(verbose: bool) -> None:

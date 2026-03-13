@@ -139,6 +139,54 @@ class DepGraph:
             result.update(cycle)
         return result
 
+    def detect_call_paths(self, max_depth: int = 5) -> list[list[Path]]:
+        """Detect important call paths starting from entrypoints.
+
+        Algorithm:
+        - start from entrypoints
+        - follow dependency graph edges
+        - limit depth to max_depth
+        - prioritize high fan-in nodes
+        """
+        paths: list[list[Path]] = []
+        entries = self.entry_points()
+
+        for entry in entries:
+            current = entry
+            path = [current]
+            
+            idx = self.path_to_idx.get(current)
+            if idx is None:
+                continue
+                
+            visited = {idx}
+
+            for _ in range(max_depth - 1):
+                curr_idx = self.path_to_idx[current]
+                successors = list(self.graph.successor_indices(curr_idx))
+                if not successors:
+                    break
+
+                # Sort by fan-in (in-degree) descending
+                successors.sort(key=lambda s: self.graph.in_degree(s), reverse=True)
+
+                next_node = None
+                for s in successors:
+                    if s not in visited:
+                        next_node = s
+                        break
+
+                if next_node is None:
+                    break
+
+                visited.add(next_node)
+                current = self.idx_to_path[next_node]
+                path.append(current)
+
+            paths.append(path)
+
+        return paths
+
     @property
     def node_count(self) -> int:
         return len(self.path_to_idx)

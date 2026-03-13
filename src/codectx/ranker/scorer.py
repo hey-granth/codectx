@@ -16,11 +16,15 @@ from codectx.graph.builder import DepGraph
 from codectx.ranker.git_meta import GitFileInfo
 
 
+from codectx.parser.base import ParseResult
+
 def score_files(
     files: list[Path],
     dep_graph: DepGraph,
     git_meta: dict[Path, GitFileInfo],
     semantic_scores: dict[Path, float] | None = None,
+    task: str = "default",
+    parse_results: dict[Path, ParseResult] | None = None,
 ) -> dict[Path, float]:
     """Score each file 0.0–1.0 using a weighted composite.
 
@@ -38,28 +42,55 @@ def score_files(
     """
     if not files:
         return {}
+        
+    w_freq = WEIGHT_GIT_FREQUENCY
+    w_fan = WEIGHT_FAN_IN
+    w_rec = WEIGHT_RECENCY
+    w_prox = WEIGHT_ENTRY_PROXIMITY
+    w_sym = 0.0
+    w_dir = 0.0
+
+    if task == "debug":
+        w_rec = 0.5
+        w_fan = 0.2
+    elif task == "feature":
+        w_fan = 0.5
+        w_sym = 0.2
+    elif task == "architecture":
+        w_fan = 0.6
+        w_dir = 0.2
+
+    # normalize weights
+    total_w = w_freq + w_fan + w_rec + w_prox + w_sym + w_dir
+    if total_w > 0:
+        w_freq /= total_w
+        w_fan /= total_w
+        w_rec /= total_w
+        w_prox /= total_w
+        w_sym /= total_w
+        w_dir /= total_w
 
     # Determine weights — if semantic scores provided, rescale
     has_semantic = semantic_scores is not None and len(semantic_scores) > 0
     if has_semantic:
         semantic_weight = 0.20
         scale = 1.0 - semantic_weight
-        w_freq = WEIGHT_GIT_FREQUENCY * scale
-        w_fan = WEIGHT_FAN_IN * scale
-        w_rec = WEIGHT_RECENCY * scale
-        w_prox = WEIGHT_ENTRY_PROXIMITY * scale
+        w_freq *= scale
+        w_fan *= scale
+        w_rec *= scale
+        w_prox *= scale
+        w_sym *= scale
+        w_dir *= scale
     else:
         semantic_weight = 0.0
-        w_freq = WEIGHT_GIT_FREQUENCY
-        w_fan = WEIGHT_FAN_IN
-        w_rec = WEIGHT_RECENCY
-        w_prox = WEIGHT_ENTRY_PROXIMITY
 
     # Collect raw signals
     raw_freq: dict[Path, float] = {}
     raw_fan_in: dict[Path, float] = {}
     raw_recency: dict[Path, float] = {}
     raw_proximity: dict[Path, float] = {}
+    raw_sym: dict[Path, float] = {}
+    raw_dir: dict[Path, float] = {}
 
     now = time.time()
     entry_distances = dep_graph.entry_distances()
@@ -81,11 +112,20 @@ def score_files(
         else:
             raw_proximity[f] = 0.0
 
+        if parse_results and f in parse_results:
+            raw_sym[f] = float(len(parse_results[f].symbols))
+        else:
+            raw_sym[f] = 0.0
+            
+        raw_dir[f] = 1.0 / (1.0 + len(f.parts))
+
     # Min-max normalize each signal
     norm_freq = _min_max_normalize(raw_freq)
     norm_fan = _min_max_normalize(raw_fan_in)
     norm_rec = _min_max_normalize(raw_recency)
     norm_prox = _min_max_normalize(raw_proximity)
+    norm_sym = _min_max_normalize(raw_sym)
+    norm_dir = _min_max_normalize(raw_dir)
 
     # Weighted composite
     cyclic = dep_graph.cyclic_files
@@ -96,6 +136,8 @@ def score_files(
             + w_fan * norm_fan.get(f, 0.0)
             + w_rec * norm_rec.get(f, 0.0)
             + w_prox * norm_prox.get(f, 0.0)
+            + w_sym * norm_sym.get(f, 0.0)
+            + w_dir * norm_dir.get(f, 0.0)
         )
         if has_semantic and semantic_scores is not None:
             score += semantic_weight * semantic_scores.get(f, 0.0)
