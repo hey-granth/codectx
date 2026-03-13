@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -29,6 +29,7 @@ class ParseResult:
     docstrings: tuple[str, ...]  # module-level docstrings
     raw_source: str
     line_count: int
+    partial_parse: bool = False
 
     @property
     def is_empty(self) -> bool:
@@ -45,4 +46,5 @@ def make_plaintext_result(path: Path, source: str) -> ParseResult:
         docstrings=(),
         raw_source=source,
         line_count=source.count("\n") + 1 if source else 0,
+        partial_parse=False,
     )

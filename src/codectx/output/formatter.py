@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codectx.compressor.budget import TokenBudget, count_tokens
+from codectx.compressor.budget import TokenBudget
 from codectx.compressor.tiered import CompressedFile
 from codectx.config.defaults import MAX_MERMAID_NODES
 from codectx.graph.builder import DepGraph
@@ -52,58 +52,65 @@ def format_context(
         arch_section += architecture_text + "\n\n"
     else:
         arch_section += _auto_architecture(compressed, root) + "\n\n"
-    arch_consumed = budget.consume_partial(arch_section)
-    parts.append(arch_consumed)
+    parts.append(budget.consume_partial(arch_section))
 
     # --- DEPENDENCY_GRAPH ---
     graph_section = _section_header(DEPENDENCY_GRAPH.title)
     graph_section += _render_mermaid_graph(dep_graph, root, compressed)
 
-    # Cyclic dependencies subsection
     if dep_graph.cycles:
         graph_section += "### Cyclic Dependencies\n\n"
         graph_section += "> [!WARNING]\n> The following circular import chains were detected:\n\n"
-        for i, cycle in enumerate(dep_graph.cycles, 1):
+        sorted_cycles = sorted(
+            dep_graph.cycles,
+            key=lambda cycle: [p.relative_to(root).as_posix() for p in cycle],
+        )
+        for i, cycle in enumerate(sorted_cycles, 1):
             rel_paths = [p.relative_to(root).as_posix() for p in cycle]
-            chain = " → ".join(f"`{r}`" for r in rel_paths)
+            chain = " -> ".join(f"`{r}`" for r in rel_paths)
             graph_section += f"{i}. {chain}\n"
         graph_section += "\n"
-
-    graph_consumed = budget.consume_partial(graph_section)
-    parts.append(graph_consumed)
+    parts.append(budget.consume_partial(graph_section))
 
     # --- ENTRY_POINTS ---
     entry_files = [cf for cf in compressed if cf.tier == 1]
+    entry_section = _section_header(ENTRY_POINTS.title)
     if entry_files:
-        entry_section = _section_header(ENTRY_POINTS.title)
         for cf in entry_files:
             entry_section += cf.content + "\n"
-        # Don't double-consume — content already counted in budget by compressor
-        parts.append(entry_section)
+    else:
+        entry_section += "*No tier-1 files selected within budget.*\n\n"
+    parts.append(entry_section)
 
     # --- CORE_MODULES ---
     core_files = [cf for cf in compressed if cf.tier == 2]
+    core_section = _section_header(CORE_MODULES.title)
     if core_files:
-        core_section = _section_header(CORE_MODULES.title)
         for cf in core_files:
             core_section += cf.content + "\n"
-        parts.append(core_section)
+    else:
+        core_section += "*No tier-2 files selected within budget.*\n\n"
+    parts.append(core_section)
 
     # --- PERIPHERY ---
     periph_files = [cf for cf in compressed if cf.tier == 3]
+    periph_section = _section_header(PERIPHERY.title)
     if periph_files:
-        periph_section = _section_header(PERIPHERY.title)
         for cf in periph_files:
             periph_section += cf.content
         periph_section += "\n"
-        parts.append(periph_section)
+    else:
+        periph_section += "*No tier-3 files selected within budget.*\n\n"
+    parts.append(periph_section)
 
     # --- RECENT_CHANGES ---
+    rc_section = _section_header(RECENT_CHANGES.title)
     if recent_changes:
-        rc_section = _section_header(RECENT_CHANGES.title)
         rc_section += recent_changes + "\n\n"
-        rc_consumed = budget.consume_partial(rc_section)
-        parts.append(rc_consumed)
+        parts.append(budget.consume_partial(rc_section))
+    else:
+        rc_section += "*No recent changes included.*\n\n"
+        parts.append(rc_section)
 
     return "".join(parts)
 

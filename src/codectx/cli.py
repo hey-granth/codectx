@@ -161,7 +161,7 @@ def benchmark(
 
     # Rank
     t0 = time.perf_counter()
-    from codectx.ranker.git_meta import collect_git_metadata
+    from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
     from codectx.ranker.scorer import score_files
 
     git_meta = collect_git_metadata(files, config.root, config.no_git)
@@ -419,6 +419,7 @@ def _run_pipeline(config: "object") -> Path:
         # Step 4: Collect git metadata + score
         progress.update(task, description="Scoring files...")
         git_meta = collect_git_metadata(files, config.root, config.no_git)
+        recent_changes = collect_recent_changes(config.root, config.since, config.no_git)
 
         # Optional: semantic scoring via --query
         sem_scores: dict[Path, float] | None = None
@@ -466,6 +467,7 @@ def _run_pipeline(config: "object") -> Path:
             root=config.root,
             budget=budget,
             architecture_text=arch_text,
+            recent_changes=recent_changes,
             roots=config.roots if len(config.roots) > 1 else None,
         )
 

@@ -58,6 +58,14 @@ def test_walk_skips_binary_files(temp_repo: Path) -> None:
     assert "image.png" not in rel_paths
 
 
+def test_walk_skips_invalid_utf8_binary(temp_repo: Path) -> None:
+    """Files that fail UTF-8 decoding should be treated as binary."""
+    (temp_repo / "blob.bin").write_bytes(b"\xff\xfe\xfd\xfa")
+    files = walk(temp_repo)
+    rel_paths = {f.relative_to(temp_repo).as_posix() for f in files}
+    assert "blob.bin" not in rel_paths
+
+
 def test_walk_returns_sorted(temp_repo: Path) -> None:
     """Result should be sorted by path."""
     files = walk(temp_repo)

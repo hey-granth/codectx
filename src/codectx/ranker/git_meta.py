@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -66,7 +68,7 @@ def _collect_from_git(
 
     try:
         head = repo.head
-        walker = repo.walk(head.target, pygit2.GIT_SORT_TIME)
+        walker = repo.walk(head.target, pygit2.GIT_SORT_TIME)  # type: ignore[arg-type]
     except Exception as exc:
         logger.warning("Could not walk git log: %s", exc)
         return _filesystem_fallback(files)
@@ -119,3 +121,86 @@ def _filesystem_fallback(files: list[Path]) -> dict[Path, GitFileInfo]:
             mtime = time.time()
         result[f] = GitFileInfo(commit_count=0, last_modified_ts=mtime)
     return result
+
+
+def collect_recent_changes(root: Path, since: str | None, no_git: bool = False) -> str:
+    """Collect a deterministic markdown summary of recent git changes."""
+    if no_git or not since:
+        return ""
+
+    cutoff = _parse_since(since)
+    if cutoff is None:
+        logger.warning("Could not parse --since value %r; skipping recent changes", since)
+        return ""
+
+    try:
+        import pygit2  # type: ignore[import-untyped]
+    except ImportError:
+        logger.warning("pygit2 not available; skipping recent changes")
+        return ""
+
+    try:
+        repo = pygit2.Repository(str(root))
+        walker = repo.walk(repo.head.target, pygit2.GIT_SORT_TIME)  # type: ignore[arg-type]
+    except Exception as exc:
+        logger.warning("Could not read git history for recent changes: %s", exc)
+        return ""
+
+    commit_lines: list[str] = []
+    touched_files: set[str] = set()
+
+    for commit in walker:
+        commit_ts = float(commit.commit_time)
+        if commit_ts < cutoff:
+            break
+
+        short_oid = str(commit.id)[:8]
+        message = (commit.message or "").splitlines()[0].strip()
+        when = datetime.fromtimestamp(commit_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        commit_lines.append(f"- `{short_oid}` ({when}) {message}")
+
+        if commit.parents:
+            parent = commit.parents[0]
+            try:
+                diff = repo.diff(parent, commit)
+            except Exception:
+                continue
+        else:
+            try:
+                diff = commit.tree.diff_to_tree()
+            except Exception:
+                continue
+
+        for delta in diff.deltas:
+            if delta.new_file.path:
+                touched_files.add(delta.new_file.path)
+
+    if not commit_lines:
+        return ""
+
+    lines = ["### Commits", "", *commit_lines, "", "### Files", ""]
+    for path in sorted(touched_files)[:50]:
+        lines.append(f"- `{path}`")
+    if len(touched_files) > 50:
+        lines.append(f"- ... and {len(touched_files) - 50} more")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _parse_since(since: str) -> float | None:
+    """Parse --since values like '7 days ago' or ISO date strings."""
+    value = since.strip()
+    m = re.fullmatch(r"(\d+)\s+days?\s+ago", value)
+    if m:
+        days = int(m.group(1))
+        return time.time() - (days * 86400)
+
+    for parser in (
+        lambda s: datetime.fromisoformat(s).replace(tzinfo=timezone.utc),
+        lambda s: datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc),
+    ):
+        try:
+            return parser(value).timestamp()
+        except ValueError:
+            continue
+    return None

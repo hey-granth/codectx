@@ -65,6 +65,7 @@ class Cache:
                 docstrings=tuple(entry.get("docstrings", [])),  # type: ignore[arg-type]
                 raw_source=str(entry.get("raw_source", "")),
                 line_count=int(entry.get("line_count", 0)),  # type: ignore[arg-type]
+                partial_parse=bool(entry.get("partial_parse", False)),
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.debug("Cache entry invalid for %s: %s", path, exc)
@@ -81,6 +82,7 @@ class Cache:
             "docstrings": list(result.docstrings),
             "raw_source": result.raw_source,
             "line_count": result.line_count,
+            "partial_parse": result.partial_parse,
         }
 
     def get_token_count(self, path: Path, file_hash: str) -> int | None:

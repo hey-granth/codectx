@@ -73,11 +73,16 @@ def _collect(
 
 
 def _is_binary(path: Path) -> bool:
-    """Detect binary files by checking for null bytes in first N bytes."""
+    """Detect binary files by probing UTF-8 decoding on the initial byte chunk."""
     try:
         with open(path, "rb") as f:
             chunk = f.read(BINARY_CHECK_BYTES)
-        return b"\x00" in chunk
+        if b"\x00" in chunk:
+            return True
+        chunk.decode("utf-8")
+        return False
+    except UnicodeDecodeError:
+        return True
     except (OSError, IOError):
         return True  # treat unreadable files as binary
 

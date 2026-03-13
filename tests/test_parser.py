@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import codectx.parser.treesitter as ts
 from codectx.parser.treesitter import parse_file
 
 
@@ -98,3 +99,25 @@ def test_parse_raw_source(python_file: Path) -> None:
     """ParseResult should contain the original source."""
     result = parse_file(python_file)
     assert "def greet" in result.raw_source
+
+
+def test_parse_supported_file_not_partial(python_file: Path) -> None:
+    """Successful tree-sitter parse should not be marked partial."""
+    result = parse_file(python_file)
+    assert result.partial_parse is False
+
+
+def test_parse_fallback_marks_partial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When tree-sitter fails, parser should return a partial parse result."""
+    f = tmp_path / "broken.py"
+    f.write_text('"""Doc"""\nimport os\nfrom x import y\n')
+
+    def _boom(_entry: object) -> object:
+        raise RuntimeError("forced failure")
+
+    monkeypatch.setattr(ts, "get_ts_language_object", _boom)
+    result = parse_file(f)
+
+    assert result.language == "python"
+    assert result.partial_parse is True
+    assert any("import os" in imp for imp in result.imports)

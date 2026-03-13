@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -203,7 +203,7 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
         tree = parser.parse(source.encode("utf-8"))
     except Exception as exc:
         logger.warning("tree-sitter parse failed for %s: %s", path, exc)
-        return make_plaintext_result(path, source)
+        return _fallback_parse(path, source, entry.name)
 
     root_node = tree.root_node
 
@@ -219,7 +219,63 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
         docstrings=tuple(docstrings),
         raw_source=source,
         line_count=source.count("\n") + 1 if source else 0,
+        partial_parse=False,
     )
+
+
+def _fallback_parse(path: Path, source: str, language: str) -> ParseResult:
+    """Best-effort fallback extraction when tree-sitter parsing fails."""
+    imports = _regex_imports(source, language)
+    docstrings = _regex_docstrings(source, language)
+    return ParseResult(
+        path=path,
+        language=language,
+        imports=tuple(imports),
+        symbols=(),
+        docstrings=tuple(docstrings),
+        raw_source=source,
+        line_count=source.count("\n") + 1 if source else 0,
+        partial_parse=True,
+    )
+
+
+def _regex_imports(source: str, language: str) -> list[str]:
+    """Extract import-like lines via lightweight regex patterns."""
+    patterns: dict[str, tuple[str, ...]] = {
+        "python": (r"^\s*import\s+.+$", r"^\s*from\s+.+\s+import\s+.+$"),
+        "javascript": (
+            r"^\s*import\s+.+$",
+            r"^\s*const\s+.+\s*=\s*require\(.+\).*$",
+            r"^\s*require\(.+\).*$",
+        ),
+        "typescript": (
+            r"^\s*import\s+.+$",
+            r"^\s*const\s+.+\s*=\s*require\(.+\).*$",
+            r"^\s*require\(.+\).*$",
+        ),
+        "go": (r'^\s*import\s+\("?.+"?\)?\s*$',),
+        "rust": (r"^\s*use\s+.+;$",),
+        "java": (r"^\s*import\s+.+;$",),
+    }
+    selected = patterns.get(language)
+    if not selected:
+        return []
+
+    imports: list[str] = []
+    for line in source.splitlines():
+        if any(re.match(pat, line) for pat in selected):
+            imports.append(line.strip())
+    return imports
+
+
+def _regex_docstrings(source: str, language: str) -> list[str]:
+    """Extract a module-level docstring/comment for fallback parsing."""
+    if language != "python":
+        return []
+    triple = re.match(r"^\s*(?:'''|\"\"\")([\s\S]*?)(?:'''|\"\"\")", source)
+    if triple:
+        return [triple.group(1).strip()]
+    return []
 
 
 # ---------------------------------------------------------------------------
