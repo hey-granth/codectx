@@ -10,32 +10,32 @@ AI agents receive poor codebase context because existing tools (repomix, etc.) a
 graph LR
     f0["src/codectx/cli.py"]
     f1["src/codectx/parser/base.py"]
-    f2["src/codectx/parser/treesitter.py"]
-    f3["src/codectx/walker.py"]
-    f4["src/codectx/cache.py"]
-    f5["src/codectx/graph/resolver.py"]
-    f6["src/codectx/ranker/git_meta.py"]
-    f7["src/codectx/graph/builder.py"]
-    f8["src/codectx/ranker/semantic.py"]
-    f9["src/codectx/output/formatter.py"]
-    f10["src/codectx/compressor/tiered.py"]
-    f11["src/codectx/ranker/scorer.py"]
-    f12["pyproject.toml"]
-    f13["src/codectx/compressor/budget.py"]
-    f14["requirements.txt"]
-    f15["src/codectx/parser/languages.py"]
-    f16["main.py"]
-    f17[".gitignore"]
-    f18["src/codectx/compressor/summarizer.py"]
-    f19["src/codectx/ignore.py"]
-    f20["src/codectx/safety.py"]
-    f21["src/codectx/__init__.py"]
-    f22["src/codectx/compressor/__init__.py"]
-    f23["src/codectx/graph/__init__.py"]
-    f24["src/codectx/output/__init__.py"]
-    f4 --> f1
-    f7 --> f1
-    f7 --> f5
+    f2["src/codectx/compressor/tiered.py"]
+    f3["src/codectx/parser/treesitter.py"]
+    f4["src/codectx/walker.py"]
+    f5["src/codectx/cache.py"]
+    f6["src/codectx/graph/resolver.py"]
+    f7["src/codectx/output/formatter.py"]
+    f8["src/codectx/ranker/git_meta.py"]
+    f9["src/codectx/graph/builder.py"]
+    f10["src/codectx/ranker/semantic.py"]
+    f11[".gitignore"]
+    f12["src/codectx/output/sections.py"]
+    f13["src/codectx/ranker/scorer.py"]
+    f14["pyproject.toml"]
+    f15["src/codectx/compressor/budget.py"]
+    f16["requirements.txt"]
+    f17["src/codectx/parser/languages.py"]
+    f18["main.py"]
+    f19["src/codectx/compressor/summarizer.py"]
+    f20["src/codectx/ignore.py"]
+    f21["src/codectx/safety.py"]
+    f22["src/codectx/__init__.py"]
+    f23["src/codectx/compressor/__init__.py"]
+    f24["src/codectx/graph/__init__.py"]
+    f5 --> f1
+    f9 --> f1
+    f9 --> f6
 ```
 
 ## ENTRY_POINTS
@@ -353,6 +353,12 @@ def cache_import(
 
 ## SUPPORTING_MODULES
 
+### `src/codectx/config/defaults.py`
+
+> Default configuration values and constants for codectx.
+
+*144 lines, 1 imports*
+
 ### `src/codectx/parser/base.py`
 
 > Core data structures for the parser module.
@@ -366,6 +372,71 @@ class ParseResult
 
 def make_plaintext_result(path: Path, source: str) -> ParseResult
     """Create a minimal ParseResult for unsupported language files."""
+
+```
+
+### `src/codectx/compressor/tiered.py`
+
+> Tiered compression — assigns tiers and enforces token budget."""
+
+
+
+```python
+class mpressedFile:
+
+    """"A file compressed to its assigned tier.""""""
+
+def sign_tiers(
+(    scores: dict[Path, float],
+) -) -> ct[Path, int]:
+
+    """"Assign tier to each file based on its score.
+
+    Tier 1 (score > 0.7): full source
+    Tier 2 (0.3–0.7): signatures + docstrings
+    Tier 3 (< 0.3): one-line summary
+    """"""
+
+def ress_files(
+  (  parse_results: dict[Path, ParseResult],
+    scores: dict[Path, float],
+    budget: TokenBudget,
+    root: Path,
+    llm_enabled: bool = False,
+    llm_provider: str = "openai",
+    llm_model: str = "",
+) -> ) -> [CompressedFile]:
+  
+    """ompress files into tiered content within the token budget.
+
+    Budget consumption order:
+      1. Tier 1 files (full source), by score descending
+      2. Tier 2 files (signatures + docstrings), by score descending
+      3. Tier 3 files (one-line summary), by score descending
+
+    Overflow policy: drop Tier 3 → truncate Tier 2 → truncate Tier 1.
+    """
+    tie"""
+
+def arseResult, pa(th: Path, root: Path) -> str:
+    """Tier) -> ful
+    """ce with metadata header."""
+    rel = path.rela"""
+
+def arseResult, pa(th: Path, root: Path) -> str:
+    """Tier) -> fun
+    """class signatures + docstrings."""
+    rel = path.rela"""
+
+def arseResult, pa(th: Path, root: Path) -> str:
+    """Tier) -> one
+    """summary."""
+    rel = path.rela"""
+
+def ParseResult) -> s(tr:
+    """Genera) ->  on
+    """summary from parse result."""
+    parts: list[str]"""
 
 ```
 
@@ -667,6 +738,55 @@ def ve_ruby(
 
 ```
 
+### `src/codectx/output/formatter.py`
+
+> Structured markdown formatter — emits CONTEXT.md."""
+
+
+
+```python
+def oot_label(f(ile_path: Path, roots: list[Path] | None) -) -> r:
+
+    """"Return a root label prefix if multi-root, else empty string.""""""
+
+def rmat_context(
+(    compressed: list[CompressedFile],
+    dep_graph: DepGraph,
+    root: Path,
+    budget: TokenBudget,
+    architecture_text: str = "",
+    roots: list[Path] | None = None,
+) -) -> r:
+
+    """"Assemble the full CONTEXT.md content.
+
+    Sections are emitted in the canonical order and consume the token budget.
+    """"""
+
+def ite_context_file(c(ontent: str, output_path: Path) -) -> ne:
+
+    """"Write the assembled context to disk.""""""
+
+def ection_header(t(itle: str) -) -> r:
+
+
+def uto_architecture(c(ompressed: list[CompressedFile], root: Path) -) -> r:
+
+    """"Generate a simple, compressed architecture summary from the file list.""""""
+
+def ender_mermaid_graph(
+(    dep_graph: DepGraph,
+    root: Path,
+    compressed: list[CompressedFile],
+) -) -> r:
+
+    """"Render the dependency graph as a Mermaid diagram.
+
+    Limited to top N ranked modules to keep the diagram readable.
+    """"""
+
+```
+
 ### `src/codectx/ranker/git_meta.py`
 
 > Git metadata extraction via pygit2.
@@ -768,12 +888,6 @@ def build_dependency_graph(
 
 ```
 
-### `src/codectx/config/defaults.py`
-
-> Default configuration values and constants for codectx.
-
-*144 lines, 1 imports*
-
 ### `src/codectx/ranker/semantic.py`
 
 > Semantic search ranking using lancedb and sentence-transformers.
@@ -814,158 +928,22 @@ def mantic_score(
 
 ```
 
-### `src/codectx/output/formatter.py`
+### `.gitignore`
 
-> Structured markdown formatter — emits CONTEXT.md."""
-
-
-
-```python
-def oot_label(f(ile_path: Path, roots: list[Path] | None) -) -> r:
-
-    """"Return a root label prefix if multi-root, else empty string.""""""
-
-def rmat_context(
-(    compressed: list[CompressedFile],
-    dep_graph: DepGraph,
-    root: Path,
-    budget: TokenBudget,
-    architecture_text: str = "",
-    roots: list[Path] | None = None,
-) -) -> r:
-
-    """"Assemble the full CONTEXT.md content.
-
-    Sections are emitted in the canonical order and consume the token budget.
-    """"""
-
-def ite_context_file(c(ontent: str, output_path: Path) -) -> ne:
-
-    """"Write the assembled context to disk.""""""
-
-def ection_header(t(itle: str) -) -> r:
-
-
-def uto_architecture(c(ompressed: list[CompressedFile], root: Path) -) -> r:
-
-    """"Generate a simple, compressed architecture summary from the file list.""""""
-
-def ender_mermaid_graph(
-(    dep_graph: DepGraph,
-    root: Path,
-    compressed: list[CompressedFile],
-) -) -> r:
-
-    """"Render the dependency graph as a Mermaid diagram.
-
-    Limited to top N ranked modules to keep the diagram readable.
-    """"""
-
-```
-
-### `src/codectx/compressor/tiered.py`
-
-> Tiered compression — assigns tiers and enforces token budget."""
-
-
-
-```python
-class mpressedFile:
-
-    """"A file compressed to its assigned tier.""""""
-
-def sign_tiers(
-(    scores: dict[Path, float],
-) -) -> ct[Path, int]:
-
-    """"Assign tier to each file based on its score.
-
-    Tier 1 (score > 0.7): full source
-    Tier 2 (0.3–0.7): signatures + docstrings
-    Tier 3 (< 0.3): one-line summary
-    """"""
-
-def ress_files(
-  (  parse_results: dict[Path, ParseResult],
-    scores: dict[Path, float],
-    budget: TokenBudget,
-    root: Path,
-    llm_enabled: bool = False,
-    llm_provider: str = "openai",
-    llm_model: str = "",
-) -> ) -> [CompressedFile]:
-  
-    """ompress files into tiered content within the token budget.
-
-    Budget consumption order:
-      1. Tier 1 files (full source), by score descending
-      2. Tier 2 files (signatures + docstrings), by score descending
-      3. Tier 3 files (one-line summary), by score descending
-
-    Overflow policy: drop Tier 3 → truncate Tier 2 → truncate Tier 1.
-    """
-    tie"""
-
-def arseResult, pa(th: Path, root: Path) -> str:
-    """Tier) -> ful
-    """ce with metadata header."""
-    rel = path.rela"""
-
-def arseResult, pa(th: Path, root: Path) -> str:
-    """Tier) -> fun
-    """class signatures + docstrings."""
-    rel = path.rela"""
-
-def arseResult, pa(th: Path, root: Path) -> str:
-    """Tier) -> one
-    """summary."""
-    rel = path.rela"""
-
-def ParseResult) -> s(tr:
-    """Genera) ->  on
-    """summary from parse result."""
-    parts: list[str]"""
-
-```
-
-### `tests/test_walker.py`
-
-> Tests for the file walker.
-
-```python
-def temp_repo(tmp_path: Path) -> Path
-    """Create a temporary repo with various files."""
-
-def test_walk_finds_source_files(temp_repo: Path) -> None
-    """Walker should find regular source files."""
-
-def test_walk_skips_ignored_dirs(temp_repo: Path) -> None
-    """Walker should skip __pycache__ and node_modules."""
-
-def test_walk_skips_binary_files(temp_repo: Path) -> None
-    """Walker should filter out binary files."""
-
-def test_walk_skips_invalid_utf8_binary(temp_repo: Path) -> None
-    """Files that fail UTF-8 decoding should be treated as binary."""
-
-def test_walk_returns_sorted(temp_repo: Path) -> None
-    """Result should be sorted by path."""
-
-def test_walk_returns_absolute_paths(temp_repo: Path) -> None
-    """All returned paths should be absolute."""
-
-```
+*18 lines, 0 imports*
 
 ## PERIPHERY
 
+- `tests/test_walker.py` — Tests for the file walker.
+- `src/codectx/output/sections.py` — Section constants for CONTEXT.md output.
 - `tests/test_parser.py` — Tests for tree-sitter parsing.
 - `src/codectx/ranker/scorer.py` — Composite file scoring — ranks files by importance."""
-- `pyproject.toml` — 90 lines
 - `tests/unit/test_formatter_sections.py` — Tests for deterministic formatter section ordering and presence.
+- `pyproject.toml` — 90 lines
+- `src/codectx/compressor/budget.py` — Token counting and budget tracking via tiktoken.
 - `tests/unit/test_cache_export.py` — Tests for CI cache export/import.
 - `tests/unit/test_cache_wiring.py` — Tests for cache wiring into the analyze pipeline.
 - `tests/unit/test_semantic.py` — Tests for semantic search ranking module.
-- `src/codectx/compressor/budget.py` — Token counting and budget tracking via tiktoken.
 - `tests/test_scorer.py` — Tests for the composite file scorer.
 - `tests/unit/test_cycles.py` — Tests for cyclic dependency detection.
 - `tests/unit/test_summarizer.py` — Tests for LLM summarizer module.
@@ -973,7 +951,6 @@ def test_walk_returns_absolute_paths(temp_repo: Path) -> None
 - `src/codectx/parser/languages.py` — Extension → language mapping for tree-sitter parsers."""
 - `tests/test_integration.py` — Integration test — runs codectx pipeline end-to-end."""
 - `main.py` — 1 function, 7 lines
-- `.gitignore` — 18 lines
 - `src/codectx/compressor/summarizer.py` — LLM-based file summarization for Tier 3 compression.
 - `src/codectx/ignore.py` — Ignore-spec handling — layers ALWAYS_IGNORE, .gitignore, .ctxignore."""
 - `tests/unit/test_multi_root.py` — Tests for multi-root support.
@@ -992,7 +969,6 @@ def test_walk_returns_absolute_paths(temp_repo: Path) -> None
 - `src/codectx/config/__init__.py` — 0 lines
 - `src/codectx/graph/__init__.py` — 0 lines
 - `src/codectx/output/__init__.py` — 0 lines
-- `src/codectx/output/sections.py` — Section constants for CONTEXT.md output.
 - `src/codectx/parser/__init__.py` — 0 lines
 - `src/codectx/ranker/__init__.py` — 0 lines
 - `tests/__init__.py` — 0 lines
@@ -1002,5 +978,5 @@ def test_walk_returns_absolute_paths(temp_repo: Path) -> None
 - `CLAUDE.md` — 91 lines
 - `DECISIONS.md` — 82 lines
 - `PLAN.md` — 54 lines
-- `README.md` — 0 lines
+- `README.md` — 104 lines
 
