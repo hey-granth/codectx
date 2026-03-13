@@ -106,7 +106,7 @@ def semantic_score(
     ]
 
     table_name = "files"
-    if table_name in db.table_names():
+    if table_name in db.list_tables():
         db.drop_table(table_name)
     table = db.create_table(table_name, data=data)
 

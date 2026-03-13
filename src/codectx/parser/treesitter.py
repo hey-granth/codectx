@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import re
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -157,7 +158,8 @@ def parse_files(files: list[Path]) -> dict[Path, ParseResult]:
         # Serialize the language entry for cross-process transfer
         work_items = [(str(p), e.name, e.ts_module_name) for p, e in parseable]
 
-        with ProcessPoolExecutor(max_workers=MAX_PARSER_WORKERS) as pool:
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=MAX_PARSER_WORKERS, mp_context=ctx) as pool:
             parsed = list(pool.map(_parse_single_worker, work_items))
 
         for pr in parsed:

@@ -24,6 +24,7 @@ def collect_git_metadata(
     files: list[Path],
     root: Path,
     no_git: bool = False,
+    max_commits: int = 5000,
 ) -> dict[Path, GitFileInfo]:
     """Collect git metadata for all files.
 
@@ -31,6 +32,7 @@ def collect_git_metadata(
         files: List of absolute file paths.
         root: Repository root.
         no_git: If True, use filesystem metadata only.
+        max_commits: Max number of commits to walk (default: 5000).
 
     Returns:
         Mapping of file path to GitFileInfo.
@@ -50,13 +52,14 @@ def collect_git_metadata(
         logger.warning("Not a git repository or git error: %s", exc)
         return _filesystem_fallback(files)
 
-    return _collect_from_git(repo, files, root)
+    return _collect_from_git(repo, files, root, max_commits)
 
 
 def _collect_from_git(
     repo: object,  # pygit2.Repository
     files: list[Path],
     root: Path,
+    max_commits: int,
 ) -> dict[Path, GitFileInfo]:
     """Walk git log to collect per-file commit counts and last-modified times."""
     import pygit2  # type: ignore[import-untyped]
@@ -74,7 +77,12 @@ def _collect_from_git(
         return _filesystem_fallback(files)
 
     # Walk commits and diff to find which files were touched
+    count = 0
     for commit in walker:
+        if count >= max_commits:
+            break
+        count += 1
+
         ts = float(commit.commit_time)
 
         if commit.parents:

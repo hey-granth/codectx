@@ -26,7 +26,7 @@ def resolve_import(
         List of resolved file paths (may be empty if unresolvable).
     """
     if language == "python":
-        return _resolve_python(import_text, root, all_files)
+        return _resolve_python(import_text, source_file, root, all_files)
     elif language in ("javascript", "typescript"):
         return _resolve_js_ts(import_text, source_file, root, all_files)
     elif language == "go":
@@ -109,17 +109,126 @@ def resolve_import_multi_root(
 _PYTHON_IMPORT_RE = re.compile(r"(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))")
 
 
-def _resolve_python(import_text: str, root: Path, all_files: frozenset[str]) -> list[Path]:
+def _resolve_python(
+    import_text: str,
+    source_file: Path,
+    root: Path,
+    all_files: frozenset[str],
+) -> list[Path]:
     m = _PYTHON_IMPORT_RE.search(import_text)
     if not m:
         return []
 
-    module_path = (m.group(1) or m.group(2)).replace(".", "/")
-    candidates = [
-        f"{module_path}.py",
-        f"{module_path}/__init__.py",
+    # Regex can capture group 1 (from ... import) or group 2 (import ...)
+    module_str = m.group(1) or m.group(2)
+    if not module_str:
+        return []
+
+    # 1. Absolute import (e.g. "import os", "from myapp import utils")
+    if not module_str.startswith("."):
+        try:
+            slash_path = module_str.replace(".", "/")
+        except ValueError:
+            return []
+
+        candidates_rel = [
+            f"{slash_path}.py",
+            f"{slash_path}/__init__.py",
+            f"src/{slash_path}.py",
+            f"src/{slash_path}/__init__.py",
+        ]
+        resolved: list[Path] = []
+        for rel in candidates_rel:
+            # We can construct the absolute path here, but checking `rel in all_files`
+            # confirms it exists within the project scope.
+            if rel in all_files:
+                resolved.append(root / rel)
+        return resolved
+
+    # 2. Relative import (e.g. ".utils", "..sub.mod")
+    # "from . import utils" -> module_str="." (regex captures it as part of [\w.]+)
+    # "from ..sub import mod" -> module_str="..sub"
+
+    # Count leading dots
+    level = 0
+    clean_module = module_str
+    for char in module_str:
+        if char == ".":
+            level += 1
+        else:
+            break
+
+    clean_module = module_str[level:]  # remove leading dots
+
+    # Determine base directory
+    try:
+        source_rel = source_file.relative_to(root)
+    except ValueError:
+        return []  # Source file outside root?
+
+    # If source is __init__.py, its "directory" for relative imports is itself (the package)
+    # If source is mod.py, its "directory" is its parent.
+    if source_file.name == "__init__.py":
+        current_pkg_dir = source_file.parent
+    else:
+        current_pkg_dir = source_file.parent
+
+    # Go up (level - 1) times if level >= 1
+    # level 1 ("from . import foo") -> current package
+    # level 2 ("from .. import foo") -> parent package
+    target_dir = current_pkg_dir
+    for _ in range(level - 1):
+        target_dir = target_dir.parent
+        # Stop at root
+        if target_dir == root:
+            break
+
+    try:
+        # Base relative path for constructing candidates
+        base_rel = target_dir.relative_to(root).as_posix()
+    except ValueError:
+        return []
+
+    # If clean_module is empty (e.g. "from . import foo"), we actually need 'foo'.
+    # But our regex `m` only captured the FROM part.
+    # The regex is `(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))`
+    # If "from . import foo", group 1 is ".". We lost "foo".
+    # We must improve the regex or parsing to handle this.
+    # For now, let's assume we proceed with just the FROM part if we can't get the IMPORT part easily without re-parsing.
+    # BUT wait! If clean_module is empty, it means we are importing FROM the current package.
+    # The import target is in the IMPORT clause which we didn't capture.
+    # Without capturing the imported name, we can't resolve "from . import foo".
+
+    # However, if module_str was "..sub", then clean_module is "sub".
+    # And we look for "sub" relative to target_dir.
+
+    if not clean_module:
+        # We can't resolve "from . import foo" without capturing "foo".
+        # Let's try to capture it.
+        # "from . import foo"
+        # We can do a second regex or improve the first one.
+        # Let's extend the regex logic inside helper? No, just quick fix here.
+        m2 = re.search(r"import\s+([\w.]+)", import_text)
+        if m2:
+            clean_module = m2.group(1)
+        else:
+            return []
+
+    slash_path = clean_module.replace(".", "/")
+
+    # Construct relative path candidates
+    prefix = f"{base_rel}/{slash_path}" if base_rel != "." else slash_path
+
+    candidates_rel = [
+        f"{prefix}.py",
+        f"{prefix}/__init__.py",
     ]
-    return [root / c for c in candidates if c in all_files]
+
+    resolved = []
+    for rel in candidates_rel:
+        if rel in all_files:
+            resolved.append(root / rel)
+    return resolved
 
 
 # ---------------------------------------------------------------------------

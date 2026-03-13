@@ -344,7 +344,7 @@ def _run_pipeline(config: "object") -> Path:
     from codectx.graph.builder import build_dependency_graph
     from codectx.output.formatter import format_context, write_context_file
     from codectx.parser.treesitter import parse_file, parse_files
-    from codectx.ranker.git_meta import collect_git_metadata
+    from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
     from codectx.ranker.scorer import score_files
     from codectx.safety import confirm_sensitive_files, find_sensitive_files
     from codectx.walker import walk, walk_multi
