@@ -467,7 +467,6 @@ def _run_pipeline(config: "object") -> Path:
             root=config.root,
             budget=budget,
             architecture_text=arch_text,
-            recent_changes=recent_changes,
             roots=config.roots if len(config.roots) > 1 else None,
         )
 

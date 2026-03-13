@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from codectx.compressor.budget import TokenBudget, count_tokens
-from codectx.config.defaults import TIER1_THRESHOLD, TIER2_THRESHOLD
+from codectx.config.defaults import (
+    ENTRYPOINT_FILENAMES,
+    MAX_CORE_MODULES,
+    MAX_ENTRYPOINT_LINES,
+    MAX_SUPPORTING_MODULES,
+    TIER1_THRESHOLD,
+    TIER2_THRESHOLD,
+)
 from codectx.parser.base import ParseResult
 
 
@@ -62,26 +69,41 @@ def compress_files(
     """
     tiers = assign_tiers(scores)
 
-    # Group and sort files by tier, then score, then path
+    # Group and sort files by score, then path
+    def sort_key(p: Path) -> tuple[float, str]:
+        return (-scores.get(p, 0.0), p.as_posix())
+
+    sorted_paths = sorted(parse_results.keys(), key=sort_key)
+
     tier1: list[Path] = []
     tier2: list[Path] = []
     tier3: list[Path] = []
 
-    for path in parse_results:
+    # Apply limits to Tier 1 and Tier 2 based on limits
+    core_count = 0
+    supporting_count = 0
+
+    for path in sorted_paths:
         tier = tiers.get(path, 3)
+        
         if tier == 1:
-            tier1.append(path)
-        elif tier == 2:
-            tier2.append(path)
-        else:
+            if path.name in ENTRYPOINT_FILENAMES:
+                tier1.append(path)
+            elif core_count < MAX_CORE_MODULES:
+                tier1.append(path)
+                core_count += 1
+            else:
+                tier = 2 # Downgrade to tier 2
+
+        if tier == 2:
+            if supporting_count < MAX_SUPPORTING_MODULES:
+                tier2.append(path)
+                supporting_count += 1
+            else:
+                tier = 3 # Downgrade to tier 3
+                
+        if tier == 3:
             tier3.append(path)
-
-    def sort_key(p: Path) -> tuple[float, str]:
-        return (-scores.get(p, 0.0), p.as_posix())
-
-    tier1.sort(key=sort_key)
-    tier2.sort(key=sort_key)
-    tier3.sort(key=sort_key)
 
     result: list[CompressedFile] = []
 
@@ -211,7 +233,15 @@ def _tier1_content(pr: ParseResult, path: Path, root: Path) -> str:
     rel = path.relative_to(root).as_posix()
     lang = pr.language if pr.language != "unknown" else ""
     header = f"### `{rel}`\n"
-    return f"{header}\n```{lang}\n{pr.raw_source}\n```\n"
+    
+    source = pr.raw_source
+    if path.name in ENTRYPOINT_FILENAMES:
+        lines = source.split("\n")
+        if len(lines) > MAX_ENTRYPOINT_LINES:
+            source = "\n".join(lines[:MAX_ENTRYPOINT_LINES])
+            source += f"\n\n... (truncated: entry point exceeds {MAX_ENTRYPOINT_LINES} lines)"
+
+    return f"{header}\n```{lang}\n{source}\n```\n"
 
 
 def _tier2_content(pr: ParseResult, path: Path, root: Path) -> str:

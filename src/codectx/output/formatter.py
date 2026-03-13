@@ -13,9 +13,11 @@ from codectx.output.sections import (
     CORE_MODULES,
     DEPENDENCY_GRAPH,
     ENTRY_POINTS,
+    CORE_MODULES,
+    SUPPORTING_MODULES,
     PERIPHERY,
-    RECENT_CHANGES,
 )
+from codectx.config.defaults import ENTRYPOINT_FILENAMES
 
 
 def _root_label(file_path: Path, roots: list[Path] | None) -> str:
@@ -37,7 +39,6 @@ def format_context(
     root: Path,
     budget: TokenBudget,
     architecture_text: str = "",
-    recent_changes: str = "",
     roots: list[Path] | None = None,
 ) -> str:
     """Assemble the full CONTEXT.md content.
@@ -49,7 +50,20 @@ def format_context(
     # --- ARCHITECTURE ---
     arch_section = _section_header(ARCHITECTURE.title)
     if architecture_text:
-        arch_section += architecture_text + "\n\n"
+        # Heavily truncate existing ARCHITECTURE.md or provide short summary to avoid >10 lines violation
+        lines = architecture_text.strip().split("\n")
+        # Find first paragraph
+        first_p = []
+        for line in lines:
+            if line.startswith("#"):
+                continue
+            if not line.strip() and first_p:
+                break
+            if line.strip():
+                first_p.append(line.strip())
+        
+        arch_section += " ".join(first_p)[:200]
+        arch_section += "\n\n(Architecture truncated. See ARCHITECTURE.md for details.)\n\n"
     else:
         arch_section += _auto_architecture(compressed, root) + "\n\n"
     parts.append(budget.consume_partial(arch_section))
@@ -72,25 +86,41 @@ def format_context(
         graph_section += "\n"
     parts.append(budget.consume_partial(graph_section))
 
-    # --- ENTRY_POINTS ---
-    entry_files = [cf for cf in compressed if cf.tier == 1]
+    # --- ENTRY_POINTS & CORE_MODULES ---
+    entry_files = []
+    core_files = []
+    for cf in compressed:
+        if cf.tier == 1:
+            if cf.path.name in ENTRYPOINT_FILENAMES:
+                entry_files.append(cf)
+            else:
+                core_files.append(cf)
+
     entry_section = _section_header(ENTRY_POINTS.title)
     if entry_files:
         for cf in entry_files:
             entry_section += cf.content + "\n"
     else:
-        entry_section += "*No tier-1 files selected within budget.*\n\n"
-    parts.append(entry_section)
+        entry_section += "*No entry points identified within budget.*\n\n"
+    parts.append(budget.consume_partial(entry_section))
 
-    # --- CORE_MODULES ---
-    core_files = [cf for cf in compressed if cf.tier == 2]
     core_section = _section_header(CORE_MODULES.title)
     if core_files:
         for cf in core_files:
             core_section += cf.content + "\n"
     else:
-        core_section += "*No tier-2 files selected within budget.*\n\n"
-    parts.append(core_section)
+        core_section += "*No core modules selected within budget.*\n\n"
+    parts.append(budget.consume_partial(core_section))
+
+    # --- SUPPORTING_MODULES ---
+    supporting_files = [cf for cf in compressed if cf.tier == 2]
+    supp_section = _section_header(SUPPORTING_MODULES.title)
+    if supporting_files:
+        for cf in supporting_files:
+            supp_section += cf.content + "\n"
+    else:
+        supp_section += "*No supporting modules selected within budget.*\n\n"
+    parts.append(budget.consume_partial(supp_section))
 
     # --- PERIPHERY ---
     periph_files = [cf for cf in compressed if cf.tier == 3]
@@ -100,17 +130,8 @@ def format_context(
             periph_section += cf.content
         periph_section += "\n"
     else:
-        periph_section += "*No tier-3 files selected within budget.*\n\n"
-    parts.append(periph_section)
-
-    # --- RECENT_CHANGES ---
-    rc_section = _section_header(RECENT_CHANGES.title)
-    if recent_changes:
-        rc_section += recent_changes + "\n\n"
-        parts.append(budget.consume_partial(rc_section))
-    else:
-        rc_section += "*No recent changes included.*\n\n"
-        parts.append(rc_section)
+        periph_section += "*No periphery files selected within budget.*\n\n"
+    parts.append(budget.consume_partial(periph_section))
 
     return "".join(parts)
 
@@ -130,19 +151,28 @@ def _section_header(title: str) -> str:
 
 
 def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str:
-    """Generate a simple architecture summary from the file list."""
+    """Generate a simple, compressed architecture summary from the file list."""
     # Group files by top-level directory
-    dirs: dict[str, list[str]] = {}
+    dirs: dict[str, int] = {}
     for cf in compressed:
         rel = cf.path.relative_to(root).as_posix()
         parts = rel.split("/")
         top = parts[0] if len(parts) > 1 else "."
-        dirs.setdefault(top, []).append(rel)
+        dirs[top] = dirs.get(top, 0) + 1
 
-    lines: list[str] = ["Project structure overview:\n"]
-    for d in sorted(dirs):
-        count = len(dirs[d])
-        lines.append(f"- **{d}/**: {count} file{'s' if count > 1 else ''}")
+    lines: list[str] = [
+        "A python-based project composed of the following subsystems:",
+        ""
+    ]
+    
+    # Sort and take top 5 most populated directories to keep it under 10 lines
+    top_dirs = sorted(dirs.items(), key=lambda x: -x[1])[:5]
+    for d, count in top_dirs:
+        if d != ".":
+            lines.append(f"- **{d}/**: Primary subsystem containing {count} files")
+            
+    if "." in dirs:
+        lines.append(f"- **Root**: Contains scripts and execution points")
 
     return "\n".join(lines)
 
@@ -156,10 +186,18 @@ def _render_mermaid_graph(
 
     Limited to top N ranked modules to keep the diagram readable.
     """
+    # Exclude tests, configs, docs, queries, and build artifacts
+    exclude_parts = {"tests", "test", "docs", "doc", "config", "configs", "queries", "build", "dist"}
+    
+    valid_files = []
+    for cf in sorted(compressed, key=lambda cf: (-cf.score, cf.path.as_posix())):
+        rel = cf.path.relative_to(root).as_posix()
+        parts = set(rel.split("/"))
+        if not parts.intersection(exclude_parts) and not rel.endswith(".scm") and not rel.endswith(".md"):
+            valid_files.append(cf)
+            
     # Use the first MAX_MERMAID_NODES files by score
-    top_files: list[CompressedFile] = sorted(
-        compressed, key=lambda cf: (-cf.score, cf.path.as_posix())
-    )[:MAX_MERMAID_NODES]
+    top_files = valid_files[:MAX_MERMAID_NODES]
 
     if not top_files:
         return "*No dependency data available.*\n\n"

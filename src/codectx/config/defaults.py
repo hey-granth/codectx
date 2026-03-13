@@ -119,7 +119,15 @@ CACHE_DIR_NAME: str = ".codectx_cache"
 # Mermaid graph limits
 # ---------------------------------------------------------------------------
 
-MAX_MERMAID_NODES: int = 50
+MAX_MERMAID_NODES: int = 25
+
+# ---------------------------------------------------------------------------
+# Strict section limits
+# ---------------------------------------------------------------------------
+
+MAX_CORE_MODULES: int = 10
+MAX_SUPPORTING_MODULES: int = 20
+MAX_ENTRYPOINT_LINES: int = 300
 
 # ---------------------------------------------------------------------------
 # Binary detection

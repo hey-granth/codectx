@@ -16,18 +16,18 @@ class Section:
 
 # Sections in output order
 ARCHITECTURE = Section(key="architecture", title="ARCHITECTURE")
-DEPENDENCY_GRAPH = Section(key="dependency_graph", title="DEPENDENCY_GRAPH")
 ENTRY_POINTS = Section(key="entry_points", title="ENTRY_POINTS")
 CORE_MODULES = Section(key="core_modules", title="CORE_MODULES")
+SUPPORTING_MODULES = Section(key="supporting_modules", title="SUPPORTING_MODULES")
+DEPENDENCY_GRAPH = Section(key="dependency_graph", title="DEPENDENCY_GRAPH")
 PERIPHERY = Section(key="periphery", title="PERIPHERY")
-RECENT_CHANGES = Section(key="recent_changes", title="RECENT_CHANGES")
 
 # Ordered list for iteration
 SECTION_ORDER: tuple[Section, ...] = (
     ARCHITECTURE,
-    DEPENDENCY_GRAPH,
     ENTRY_POINTS,
     CORE_MODULES,
+    SUPPORTING_MODULES,
+    DEPENDENCY_GRAPH,
     PERIPHERY,
-    RECENT_CHANGES,
 )
