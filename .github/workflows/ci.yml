@@ -10,13 +10,19 @@ jobs:
   quality:
     name: Quality checks (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -31,14 +37,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install project and development dependencies
+      - name: Install project and dev dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e .
           pip install pytest pytest-cov ruff mypy vulture build
 
-      - name: Lint (ruff)
-        run: ruff check src
+      - name: Auto-format code with Ruff
+        run: |
+          ruff format src tests
+
+      - name: Commit formatting changes
+        if: github.event_name == 'pull_request'
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config --global user.name "github-actions"
+            git config --global user.email "github-actions@github.com"
+            git add .
+            git commit -m "Apply automatic formatting"
+            git push
+          fi
 
       - name: Type check (mypy)
         run: mypy src
@@ -46,8 +64,8 @@ jobs:
       - name: Dead code detection (vulture)
         run: vulture src --min-confidence 80
 
-      - name: Test suite (pytest)
+      - name: Run tests (pytest)
         run: pytest -v
 
-      - name: Build package (PEP 517)
+      - name: Build package
         run: python -m build
