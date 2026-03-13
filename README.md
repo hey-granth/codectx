@@ -1,336 +1,245 @@
-# codectx — Codebase Context Compiler for AI Agents
+# codectx
 
-codectx compiles a repository into a structured `CONTEXT.md` file optimized for AI coding agents.
+[![PyPI](https://img.shields.io/pypi/v/codectx)](https://pypi.org/project/codectx/)
+[![Python](https://img.shields.io/pypi/pyversions/codectx)](https://github.com/hey-granth/codectx)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/hey-granth/codectx/blob/main/LICENSE)
 
-Instead of feeding raw repositories to an AI system, codectx analyzes the project structure, identifies important modules, and produces a high-signal context document designed for efficient reasoning.
+A CLI tool that analyzes a repository and generates a structured `CONTEXT.md` file optimized for AI coding agents.
 
----
+## Overview
 
-# Overview
+### Problem
 
-Modern AI coding agents struggle with large repositories.
+Large codebases are difficult for AI agents to reason about. Raw repositories contain thousands of files with unclear entry points and hidden dependency relationships. Feeding unstructured code directly to an AI model results in:
 
-Raw codebases contain thousands of files, unclear entry points, and hidden dependency relationships. Feeding this directly to an AI model results in:
+- Poor signal-to-noise ratio—critical logic buried under utilities and boilerplate
+- Wasted context window tokens—agents spend budget on irrelevant modules
+- Weak reasoning about dependencies—agents cannot trace execution flow without structural information
 
-- poor signal-to-noise ratio
-- wasted context window tokens
-- agents missing critical modules
-- inaccurate reasoning about the system
+### Solution
 
-codectx solves this by **treating context generation as a compilation process**.
+codectx treats context generation as a **compilation process**. It analyzes your repository, ranks files by importance using dependency graphs and git metadata, compresses code intelligently to a token budget, and emits a structured markdown document designed specifically for AI systems.
 
-The tool analyzes the repository, ranks files by importance, compresses code intelligently, and emits a structured `CONTEXT.md` designed specifically for AI agents.
+The result is a high-signal context file that helps AI agents understand architecture and make better engineering decisions.
 
----
+## Key Features
 
-# Quick Start
+- **Fast codebase scanning** — respects `.gitignore` and `.ctxignore` patterns
+- **Dependency graph analysis** — constructs module relationships and identifies critical paths
+- **Token-aware compression** — enforces hard token budget with intelligent truncation
+- **Language-agnostic parsing** — tree-sitter supports Python, TypeScript, JavaScript, Go, Rust, Java, and more
+- **Deterministic output** — identical repositories produce identical context
+- **Incremental mode** — watch filesystem and regenerate on changes
+- **High-signal ranking** — scores files by git frequency, dependency centrality, and recency
+
+## Installation
+
+codectx requires **Python 3.10+** and is distributed through PyPI.
+
+### Using `pip`
 
 ```bash
-codectx analyze .
+pip install codectx
 ```
 
-This analyzes the current repository and generates a single structured context file:
-
-```
-CONTEXT.md
-```
-
-You can customize the analysis with advanced flags:
+### Using `uv`
 
 ```bash
-# Optimize context for a specific task (debug, feature, architecture)
-codectx analyze . --task debug
-
-# Generate multi-layer context files (REPO_MAP.md, CORE_CONTEXT.md)
-codectx analyze . --layers
+uv add codectx
 ```
 
-You can then provide `CONTEXT.md` (or the layered files) to your AI coding agent as highly focused structured repository context.
-
----
-
-# Why codectx exists
-
-Most tools that prepare code for AI agents simply:
-
-* concatenate repository files
-* generate shallow summaries
-* ignore dependency relationships
-
-This causes several problems:
-
-**Poor signal-to-noise ratio**
-Core architecture is buried under utilities and boilerplate.
-
-**Inefficient token usage**
-Agents spend context window tokens on irrelevant modules.
-
-**Weak reasoning about dependencies**
-Without structural information, agents struggle to trace execution flow.
-
-codectx addresses this by analyzing repositories as **systems of dependencies**, not collections of files.
-
----
-
-# How codectx works
-
-codectx processes repositories through a structured pipeline:
-
-```
-Repository
-    │
-    ▼
-Walker
-    │
-    ▼
-Parser
-    │
-    ▼
-Dependency Graph
-    │
-    ▼
-Ranker
-    │
-    ▼
-Compressor
-    │
-    ▼
-Formatter
-    │
-    ▼
-CONTEXT.md
-```
-
-### Walker
-
-Discovers repository files while respecting `.gitignore` and `.ctxignore`.
-
-### Parser
-
-Extracts imports, symbols, and signatures using tree-sitter.
-
-### Dependency Graph
-
-Builds a directed graph of module relationships.
-
-### Ranker
-
-Scores files using graph centrality and git metadata.
-
-### Compressor
-
-Fits the most relevant code into a strict token budget.
-
-### Formatter
-
-Generates a structured `CONTEXT.md` optimized for AI agents.
-
----
-
-# Key Features
-
-* automatic repository analysis
-* dependency graph and critical call path construction
-* semantic relevance scaling and search using `lancedb`
-* task-aware context weighting (debug, feature, architecture)
-* multi-layer context generation (`--layers`)
-* performance and budget telemetry
-* deterministic output
-* multi-language parsing
-
-Supported languages include:
-
-* Python
-* TypeScript
-* JavaScript
-* Go
-* Rust
-* Java
-
----
-
-# Installation
-
-codectx requires **Python 3.10+**.
-
-Until the package is published on PyPI, install it from source.
-
-### Clone the repository
+### From source (development)
 
 ```bash
 git clone https://github.com/hey-granth/codectx.git
 cd codectx
+pip install -e ".[dev]"
 ```
 
-### Create a virtual environment
+## Usage
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
+### Basic analysis
 
-### Install in development mode
-
-```bash
-pip install -e .
-```
-
-You can now run:
+Generate a context file for the current repository:
 
 ```bash
 codectx analyze .
 ```
 
----
+This produces `CONTEXT.md` with the following sections:
 
-# CLI Commands
+- **ARCHITECTURE** — High-level project structure
+- **ENTRY_POINTS** — Main execution paths and public APIs
+- **CORE_MODULES** — Full source for the most important files
+- **SUPPORTING_MODULES** — Compressed signatures and docstrings
+- **DEPENDENCY_GRAPH** — Mermaid diagram of module relationships
+- **PERIPHERY** — One-line summaries of remaining files
 
-### Generate context
+### Custom token budget
 
-```bash
-codectx analyze .
-```
-
-Generates `CONTEXT.md` for the current repository. You can append `--task [debug|feature|architecture]` to adjust the ranking heuristics, or `--layers` to write separate files (`REPO_MAP.md`, `CORE_CONTEXT.md`) alongside the full context.
-
----
-
-### Semantic Search
+Adjust the context window size:
 
 ```bash
-codectx search "authentication logic" --root .
+codectx analyze . --tokens 60000
 ```
 
-Leverages `sentence-transformers` and `LanceDB` to find the most semantically relevant files for a natural language query, returning a ranked list with relevance scores.
-
----
-
-### Benchmark repository analysis
+### Custom output path
 
 ```bash
-codectx benchmark .
+codectx analyze . --output my-context.md
 ```
 
-Shows detailed performance statistics for each pipeline stage.
+### Watch mode
 
----
-
-### Watch repository changes
+Automatically regenerate context on file changes:
 
 ```bash
 codectx watch .
 ```
 
-Automatically regenerates `CONTEXT.md` whenever files change.
+### Recent changes
 
----
+Include a diff section for changes within a time window:
 
-# Output Format
+```bash
+codectx analyze . --since "7 days ago"
+```
 
-The generated `CONTEXT.md` contains structured sections designed for AI reasoning.
+## Output Format
+
+The generated `CONTEXT.md` is structured with fixed sections optimized for AI reasoning:
 
 ### ARCHITECTURE
 
-High-level project structure and auto-generated description.
-
-### ENTRY_POINTS
-
-Main execution paths and public interfaces.
-
-### SYMBOL_INDEX
-
-Comprehensive list of top-level code symbols (classes, functions, methods) to provide rapid overview.
-
-### IMPORTANT_CALL_PATHS
-
-Traces of critical execution paths starting from entry points deep into the dependency graph.
-
-### CORE_MODULES
-
-Full source code for the most important logic.
-
-### SUPPORTING_MODULES
-
-Compressed signatures and docstrings for secondary modules.
+Auto-generated project description and high-level structure.
 
 ### DEPENDENCY_GRAPH
 
-Mermaid graph showing module relationships and cyclic dependency warnings.
+Mermaid diagram showing module relationships. Flags cyclic dependencies.
+
+### ENTRY_POINTS
+
+Main files and public interfaces—full source code.
+
+### CORE_MODULES
+
+Important modules based on dependency centrality and git history—full source.
+
+### SUPPORTING_MODULES
+
+Secondary modules—function signatures and docstrings only.
 
 ### PERIPHERY
 
-One-line summaries of remaining files.
+Remaining files—module name and one-line summary.
 
----
+### RECENT_CHANGES
 
-# Example Workflow
+Optional section showing git diff since a specified date.
 
-1. Clone a repository.
+## Development
 
-```
-git clone https://github.com/USERNAME/PROJECT.git
-cd PROJECT
-```
+### Setup
 
-2. Generate context.
+Install dev dependencies:
 
-```
-codectx analyze .
+```bash
+pip install -e ".[dev]"
 ```
 
-3. Provide `CONTEXT.md` to your AI coding agent.
+### Running tests
 
-4. Run development tasks with significantly improved context.
+```bash
+pytest
+```
 
----
+With coverage:
 
-# When to use codectx
+```bash
+pytest --cov=src/codectx
+```
 
-codectx is useful when:
+### Type checking
 
-* preparing context for AI coding agents
-* exploring unfamiliar repositories
-* reducing prompt token usage
-* improving AI code generation accuracy
+```bash
+mypy src
+```
 
----
+### Code formatting
 
-# Design Principles
+```bash
+ruff format src tests
+```
 
-codectx follows several core engineering principles:
+### Linting
 
-**Deterministic output**
-Identical repositories produce identical context.
+```bash
+ruff check src tests
+```
 
-**High signal-to-noise ratio**
-Important modules are prioritized.
+## How It Works
 
-**Token efficiency**
-Context windows are used efficiently.
+codectx processes repositories through a structured pipeline:
 
-**Language-agnostic parsing**
-Tree-sitter ensures consistent behavior across languages.
+```
+Repository
+    ↓
+[Walker]       → Scan files, apply .gitignore
+    ↓
+[Parser]       → Extract imports and symbols via tree-sitter
+    ↓
+[Graph]        → Build dependency graph
+    ↓
+[Ranker]       → Score files by importance
+    ↓
+[Compressor]   → Fit content to token budget
+    ↓
+[Formatter]    → Emit structured markdown
+    ↓
+CONTEXT.md
+```
 
-**Modular architecture**
-Each pipeline stage is independently extensible.
+For a detailed explanation of each stage, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
----
+## Design Principles
 
-# Contributing
+**Deterministic output** — Identical repositories produce identical context across runs.
 
-Contributions are welcome.
+**High signal-to-noise ratio** — Critical modules are prioritized; boilerplate is deprioritized.
 
-The project prioritizes:
+**Token efficiency** — Every token in the output is optimized for usefulness.
 
-* correctness
-* performance
-* maintainability
+**Language-agnostic** — tree-sitter enables consistent parsing across six+ languages.
 
-See `ARCHITECTURE.md` for internal design details.
+**Modular architecture** — Each pipeline stage is independently extensible.
 
----
+See [DECISIONS.md](DECISIONS.md) for the reasoning behind key architectural choices.
 
-# License
+## Configuration
 
-MIT License
+codectx respects a `.contextcraft.toml` file in the project root:
+
+```toml
+[codectx]
+token_budget = 120000
+output = "CONTEXT.md"
+include_patterns = ["src/**", "lib/**"]
+exclude_patterns = ["tests/**", "*.test.py"]
+```
+
+CLI flags override configuration file values.
+
+## Contributing
+
+Contributions are welcome. The project prioritizes:
+
+- Correctness
+- Performance
+- Maintainability
+
+Please file issues for bugs or feature requests.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
 
