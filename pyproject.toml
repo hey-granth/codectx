@@ -83,8 +83,21 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
+files = ["src"]
+warn_unused_ignores = true
 strict = true
-files = ["src/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "tomllib",
+    "openai",
+    "anthropic",
+    "lancedb",
+    "sentence_transformers",
+    "pygit2",
+    "tomli",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

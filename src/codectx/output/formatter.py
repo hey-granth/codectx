@@ -55,7 +55,7 @@ def format_context(
         # Heavily truncate existing ARCHITECTURE.md or provide short summary to avoid >10 lines violation
         lines = architecture_text.strip().split("\n")
         # Find first paragraph
-        first_p = []
+        first_p: list[str] = []
         for line in lines:
             if line.startswith("#"):
                 continue
@@ -149,12 +149,12 @@ def format_context(
         import_lines = []
         for path in call_paths:
             for i, node_path in enumerate(path):
-                pr = parse_results.get(node_path)
+                node_pr = parse_results.get(node_path)
                 sym_name = node_path.stem
-                if pr and pr.symbols:
+                if node_pr and node_pr.symbols:
                     # just take the first symbol as the main representative
-                    sym_name = f"{node_path.stem}.{pr.symbols[0].name}()"
-                elif pr and not pr.symbols:
+                    sym_name = f"{node_path.stem}.{node_pr.symbols[0].name}()"
+                elif node_pr and not node_pr.symbols:
                     sym_name = f"{node_path.stem}()"
 
                 if i == 0:

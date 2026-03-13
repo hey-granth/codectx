@@ -7,6 +7,7 @@ import json
 import logging
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from codectx.config.defaults import CACHE_DIR_NAME
 from codectx.parser.base import ParseResult, Symbol
@@ -53,18 +54,72 @@ class Cache:
             return None
 
         try:
-            symbols = tuple(
-                Symbol(**s)
-                for s in entry.get("symbols", [])  # type: ignore[arg-type]
-            )
+            raw_symbols = entry.get("symbols", [])
+            if not isinstance(raw_symbols, list):
+                return None
+
+            symbols_list: list[Symbol] = []
+            for item in raw_symbols:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name")
+                kind = item.get("kind")
+                signature = item.get("signature")
+                docstring = item.get("docstring")
+                start_line = item.get("start_line")
+                end_line = item.get("end_line")
+                children = item.get("children", ())
+                if not isinstance(children, (list, tuple)):
+                    children = ()
+                if not (
+                    isinstance(name, str)
+                    and isinstance(kind, str)
+                    and isinstance(signature, str)
+                    and isinstance(docstring, str)
+                    and isinstance(start_line, int)
+                    and isinstance(end_line, int)
+                ):
+                    continue
+                symbols_list.append(
+                    Symbol(
+                        name=name,
+                        kind=kind,
+                        signature=signature,
+                        docstring=docstring,
+                        start_line=start_line,
+                        end_line=end_line,
+                        children=_decode_children(children),
+                    )
+                )
+
+            path_value = entry.get("path")
+            language_value = entry.get("language")
+            imports_value = entry.get("imports", [])
+            docstrings_value = entry.get("docstrings", [])
+            raw_source_value = entry.get("raw_source", "")
+            line_count_value = entry.get("line_count", 0)
+
+            if not isinstance(path_value, str) or not isinstance(language_value, str):
+                return None
+            if not isinstance(imports_value, list) or not isinstance(docstrings_value, list):
+                return None
+            if not isinstance(raw_source_value, str):
+                raw_source_value = str(raw_source_value)
+
+            imports = tuple(str(v) for v in imports_value)
+            docstrings = tuple(str(v) for v in docstrings_value)
+            line_count = _coerce_int(line_count_value)
+            if line_count is None:
+                return None
+
             return ParseResult(
-                path=Path(entry["path"]),  # type: ignore[arg-type]
-                language=str(entry["language"]),
-                imports=tuple(entry.get("imports", [])),  # type: ignore[arg-type]
-                symbols=symbols,
-                docstrings=tuple(entry.get("docstrings", [])),  # type: ignore[arg-type]
-                raw_source=str(entry.get("raw_source", "")),
-                line_count=int(entry.get("line_count", 0)),  # type: ignore[arg-type]
+                path=Path(path_value),
+                language=language_value,
+                imports=imports,
+                symbols=tuple(symbols_list),
+                docstrings=docstrings,
+                raw_source=raw_source_value,
+                line_count=line_count,
                 partial_parse=bool(entry.get("partial_parse", False)),
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -91,7 +146,8 @@ class Cache:
         entry = self._data.get(key)
         if entry is None or entry.get("file_hash") != file_hash:
             return None
-        return int(entry.get("count", 0))  # type: ignore[arg-type]
+        count_value = entry.get("count", 0)
+        return _coerce_int(count_value)
 
     def put_token_count(self, path: Path, file_hash: str, count: int) -> None:
         """Cache a token count."""
@@ -150,3 +206,52 @@ def file_hash(path: Path) -> str:
         return hashlib.md5(content).hexdigest()  # noqa: S324
     except OSError:
         return ""
+
+
+def _decode_children(children: list[Any] | tuple[Any, ...]) -> tuple[Symbol, ...]:
+    decoded: list[Symbol] = []
+    for child in children:
+        if not isinstance(child, dict):
+            continue
+        name = child.get("name")
+        kind = child.get("kind")
+        signature = child.get("signature")
+        docstring = child.get("docstring")
+        start_line = child.get("start_line")
+        end_line = child.get("end_line")
+        if not (
+            isinstance(name, str)
+            and isinstance(kind, str)
+            and isinstance(signature, str)
+            and isinstance(docstring, str)
+            and isinstance(start_line, int)
+            and isinstance(end_line, int)
+        ):
+            continue
+        decoded.append(
+            Symbol(
+                name=name,
+                kind=kind,
+                signature=signature,
+                docstring=docstring,
+                start_line=start_line,
+                end_line=end_line,
+                children=(),
+            )
+        )
+    return tuple(decoded)
+
+
+def _coerce_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None

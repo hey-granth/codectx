@@ -5,6 +5,8 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pathspec
+
 from codectx.config.defaults import BINARY_CHECK_BYTES, MAX_IO_WORKERS
 from codectx.ignore import build_ignore_spec, should_ignore
 
@@ -54,7 +56,7 @@ def walk(
 def _collect(
     current: Path,
     root: Path,
-    spec: object,  # pathspec.PathSpec
+    spec: pathspec.PathSpec,
     out: list[Path],
 ) -> None:
     """Recursively collect files, pruning ignored directories."""
@@ -64,7 +66,7 @@ def _collect(
         return
 
     for entry in entries:
-        if should_ignore(spec, entry, root):  # type: ignore[arg-type]
+        if should_ignore(spec, entry, root):
             continue
         if entry.is_dir():
             _collect(entry, root, spec, out)

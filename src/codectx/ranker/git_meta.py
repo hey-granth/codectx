@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 import re
 import time
+from importlib import import_module
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -40,38 +42,37 @@ def collect_git_metadata(
     if no_git:
         return _filesystem_fallback(files)
 
-    try:
-        import pygit2  # type: ignore[import-untyped]
-    except ImportError:
+    pygit2_mod = _load_pygit2()
+    if pygit2_mod is None:
         logger.warning("pygit2 not available, falling back to filesystem metadata")
         return _filesystem_fallback(files)
 
     try:
-        repo = pygit2.Repository(str(root))
+        repo = pygit2_mod.Repository(str(root))
     except Exception as exc:
         logger.warning("Not a git repository or git error: %s", exc)
         return _filesystem_fallback(files)
 
-    return _collect_from_git(repo, files, root, max_commits)
+    return _collect_from_git(repo, pygit2_mod, files, root, max_commits)
 
 
 def _collect_from_git(
-    repo: object,  # pygit2.Repository
+    repo: Any,
+    pygit2_mod: Any,
     files: list[Path],
     root: Path,
     max_commits: int,
 ) -> dict[Path, GitFileInfo]:
     """Walk git log to collect per-file commit counts and last-modified times."""
-    import pygit2  # type: ignore[import-untyped]
-
-    assert isinstance(repo, pygit2.Repository)
 
     commit_counts: dict[str, int] = {}
     last_modified: dict[str, float] = {}
 
     try:
         head = repo.head
-        walker = repo.walk(head.target, pygit2.GIT_SORT_TIME)  # type: ignore[arg-type]
+        if head.target is None:
+            return _filesystem_fallback(files)
+        walker = repo.walk(head.target, pygit2_mod.GIT_SORT_TIME)
     except Exception as exc:
         logger.warning("Could not walk git log: %s", exc)
         return _filesystem_fallback(files)
@@ -141,15 +142,16 @@ def collect_recent_changes(root: Path, since: str | None, no_git: bool = False) 
         logger.warning("Could not parse --since value %r; skipping recent changes", since)
         return ""
 
-    try:
-        import pygit2  # type: ignore[import-untyped]
-    except ImportError:
+    pygit2_mod = _load_pygit2()
+    if pygit2_mod is None:
         logger.warning("pygit2 not available; skipping recent changes")
         return ""
 
     try:
-        repo = pygit2.Repository(str(root))
-        walker = repo.walk(repo.head.target, pygit2.GIT_SORT_TIME)  # type: ignore[arg-type]
+        repo = pygit2_mod.Repository(str(root))
+        if repo.head.target is None:
+            return ""
+        walker = repo.walk(repo.head.target, pygit2_mod.GIT_SORT_TIME)
     except Exception as exc:
         logger.warning("Could not read git history for recent changes: %s", exc)
         return ""
@@ -203,12 +205,24 @@ def _parse_since(since: str) -> float | None:
         days = int(m.group(1))
         return time.time() - (days * 86400)
 
-    for parser in (
-        lambda s: datetime.fromisoformat(s).replace(tzinfo=timezone.utc),
-        lambda s: datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc),
-    ):
+    def _parse_iso(s: str) -> datetime:
+        return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+
+    def _parse_ymd(s: str) -> datetime:
+        return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    parsers: tuple[Callable[[str], datetime], ...] = (_parse_iso, _parse_ymd)
+    for parser in parsers:
         try:
             return parser(value).timestamp()
         except ValueError:
             continue
     return None
+
+
+def _load_pygit2() -> Any | None:
+    """Resolve pygit2 at call-time so tests can monkeypatch sys.modules safely."""
+    try:
+        return import_module("pygit2")
+    except ImportError:
+        return None

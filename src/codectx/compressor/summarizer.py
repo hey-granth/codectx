@@ -9,8 +9,13 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from codectx.parser.base import ParseResult
+
+if TYPE_CHECKING:
+    import anthropic as anthropic_module
+    import openai as openai_module
 
 logger = logging.getLogger(__name__)
 
@@ -25,17 +30,21 @@ _PROMPT_TEMPLATE = (
 # Track availability of LLM providers
 _HAS_OPENAI = False
 _HAS_ANTHROPIC = False
+openai: Any | None = None
+anthropic: Any | None = None
 
 try:
-    import openai  # noqa: F401
+    import openai as openai_module
 
+    openai = openai_module
     _HAS_OPENAI = True
 except ImportError:
     pass
 
 try:
-    import anthropic  # noqa: F401
+    import anthropic as anthropic_module
 
+    anthropic = anthropic_module
     _HAS_ANTHROPIC = True
 except ImportError:
     pass
@@ -113,10 +122,8 @@ def summarize_files_batch(
 
 def _summarize_openai(prompt: str, model: str) -> str:
     """Call OpenAI API for summarization."""
-    if not _HAS_OPENAI:
+    if not _HAS_OPENAI or openai is None:
         raise ImportError("openai is not installed. Install with: pip install codectx[llm]")
-
-    import openai
 
     client = openai.OpenAI()
     response = client.chat.completions.create(
@@ -125,15 +132,14 @@ def _summarize_openai(prompt: str, model: str) -> str:
         max_tokens=100,
         temperature=0.0,
     )
-    return (response.choices[0].message.content or "").strip()
+    content = response.choices[0].message.content
+    return str(content or "").strip()
 
 
 def _summarize_anthropic(prompt: str, model: str) -> str:
     """Call Anthropic API for summarization."""
-    if not _HAS_ANTHROPIC:
+    if not _HAS_ANTHROPIC or anthropic is None:
         raise ImportError("anthropic is not installed. Install with: pip install codectx[llm]")
-
-    import anthropic
 
     client = anthropic.Anthropic()
     response = client.messages.create(
@@ -141,4 +147,6 @@ def _summarize_anthropic(prompt: str, model: str) -> str:
         max_tokens=100,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text.strip()
+    block = response.content[0] if response.content else None
+    text = getattr(block, "text", "") if block is not None else ""
+    return str(text).strip()

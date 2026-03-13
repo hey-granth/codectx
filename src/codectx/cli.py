@@ -311,6 +311,7 @@ def search(
 
         from codectx.cache import Cache
         from codectx.config.loader import load_config
+        from codectx.parser.base import ParseResult
         from codectx.parser.treesitter import parse_files
         from codectx.walker import walk
 
@@ -319,7 +320,7 @@ def search(
 
         # Parse files with cache
         cache = Cache(config.root)
-        parse_results = {}
+        parse_results: dict[Path, ParseResult] = {}
         uncached_files: list[Path] = []
         for f in files:
             try:
@@ -480,6 +481,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
     from codectx.config.loader import Config
     from codectx.graph.builder import build_dependency_graph
     from codectx.output.formatter import format_context, write_context_file
+    from codectx.parser.base import ParseResult
     from codectx.parser.treesitter import parse_files
     from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
     from codectx.ranker.scorer import score_files
@@ -523,7 +525,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
         progress.update(task, description="Parsing files...")
         cache = Cache(config.root)
 
-        parse_results = {}
+        parse_results: dict[Path, ParseResult] = {}
         uncached_files: list[Path] = []
 
         for f in files:
@@ -632,7 +634,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
 
     from codectx.compressor.budget import count_tokens
 
-    original_tokens = sum(count_tokens(pr.raw_source) for pr in parse_results.values() if pr)
+    original_tokens = sum(count_tokens(pr.raw_source) for pr in parse_results.values())
 
     return PipelineMetrics(
         output_path=output_path,

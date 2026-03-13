@@ -8,24 +8,33 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from codectx.parser.base import ParseResult
+
+if TYPE_CHECKING:
+    import lancedb as lancedb_module
+    from sentence_transformers import SentenceTransformer as SentenceTransformerType
 
 logger = logging.getLogger(__name__)
 
 _HAS_LANCEDB = False
 _HAS_SENTENCE_TRANSFORMERS = False
+lancedb: Any | None = None
+SentenceTransformer: Any | None = None
 
 try:
-    import lancedb  # noqa: F401
+    import lancedb as lancedb_module
 
+    lancedb = lancedb_module
     _HAS_LANCEDB = True
 except ImportError:
     pass
 
 try:
-    from sentence_transformers import SentenceTransformer  # noqa: F401
+    from sentence_transformers import SentenceTransformer as SentenceTransformerType
 
+    SentenceTransformer = SentenceTransformerType
     _HAS_SENTENCE_TRANSFORMERS = True
 except ImportError:
     pass
@@ -65,8 +74,8 @@ def semantic_score(
             "sentence-transformers is not installed. Install with: pip install codectx[semantic]"
         )
 
-    import lancedb
-    from sentence_transformers import SentenceTransformer
+    if lancedb is None or SentenceTransformer is None:
+        raise ImportError("Semantic dependencies not available")
 
     model = SentenceTransformer(_DEFAULT_MODEL)
 
@@ -117,15 +126,16 @@ def semantic_score(
     if not results:
         return {}
 
-    distances = [r.get("_distance", 0.0) for r in results]
+    distances = [float(r.get("_distance", 0.0)) for r in results]
     max_dist = max(distances) if distances else 1.0
     if max_dist == 0.0:
         max_dist = 1.0
 
     scores: dict[Path, float] = {}
     for r in results:
-        p = Path(r["path"])
-        dist = r.get("_distance", 0.0)
+        raw_path = r.get("path", "")
+        p = Path(str(raw_path))
+        dist = float(r.get("_distance", 0.0))
         # Invert: closer = higher score
         scores[p] = round(max(1.0 - (dist / max_dist), 0.0), 6)
 
