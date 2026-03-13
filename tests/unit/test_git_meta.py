@@ -3,7 +3,9 @@
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
-from codectx.ranker.git_meta import collect_git_metadata, GitFileInfo, collect_recent_changes
+
+from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
+
 
 def test_collect_no_git(tmp_path: Path) -> None:
     f = tmp_path / "a.py"
@@ -13,11 +15,12 @@ def test_collect_no_git(tmp_path: Path) -> None:
     assert f in res
     assert res[f].commit_count == 0
 
+
 def test_collect_git_success(tmp_path: Path) -> None:
     f = tmp_path / "a.py"
     f.write_text("code\n")
     files = [f]
-    
+
     mock_pygit2 = MagicMock()
     mock_delta = MagicMock()
     mock_delta.new_file.path = "a.py"
@@ -27,22 +30,24 @@ def test_collect_git_success(tmp_path: Path) -> None:
     mock_commit.message = "Initial commit"
     mock_commit.parents = []
     mock_commit.tree.diff_to_tree.return_value.deltas = [mock_delta]
-    
+
     class DummyRepo:
         def __init__(self, path):
             self.head = MagicMock()
+
         def walk(self, *args):
             return [mock_commit]
-            
+
     mock_pygit2.Repository = DummyRepo
-    
+
     sys.modules["pygit2"] = mock_pygit2
-    
+
     res = collect_git_metadata(files, tmp_path, no_git=False)
     assert res[f].commit_count == 1
     assert res[f].last_modified_ts == 1000.0
-    
+
     del sys.modules["pygit2"]
+
 
 def test_collect_recent_changes(tmp_path: Path) -> None:
     mock_pygit2 = MagicMock()
@@ -51,20 +56,21 @@ def test_collect_recent_changes(tmp_path: Path) -> None:
     mock_commit = MagicMock()
     # 2 days ago
     import time
+
     mock_commit.commit_time = time.time() - 86400 * 2
     mock_commit.id = "12345678"
     mock_commit.message = "Initial commit"
     mock_commit.parents = []
     mock_commit.tree.diff_to_tree.return_value.deltas = [mock_delta]
-    
+
     mock_repo = MagicMock()
     mock_repo.walk.return_value = [mock_commit]
     mock_pygit2.Repository.return_value = mock_repo
-    
+
     sys.modules["pygit2"] = mock_pygit2
-    
+
     out = collect_recent_changes(tmp_path, since="7 days ago")
     assert "a.py" in out
     assert "Initial commit" in out
-    
+
     del sys.modules["pygit2"]

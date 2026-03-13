@@ -60,8 +60,8 @@ def test_multi_root_pipeline(two_roots: tuple[Path, Path]) -> None:
     """Pipeline should work with multiple roots."""
     root_a, root_b = two_roots
 
-    from codectx.config.loader import load_config
     from codectx.cli import _run_pipeline
+    from codectx.config.loader import load_config
 
     config = load_config(
         root_a,

@@ -528,14 +528,16 @@ def _js_class_symbol(node: Any, source: str) -> Symbol:
                         break
                 if mname:
                     first_line = _node_text(sub, source).split("\n")[0].rstrip(" {")
-                    children.append(Symbol(
-                        name=mname,
-                        kind="method",
-                        signature=first_line,
-                        docstring="",
-                        start_line=sub.start_point[0] + 1,
-                        end_line=sub.end_point[0] + 1,
-                    ))
+                    children.append(
+                        Symbol(
+                            name=mname,
+                            kind="method",
+                            signature=first_line,
+                            docstring="",
+                            start_line=sub.start_point[0] + 1,
+                            end_line=sub.end_point[0] + 1,
+                        )
+                    )
 
     return Symbol(
         name=name or "<anonymous>",

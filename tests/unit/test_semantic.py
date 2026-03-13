@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from codectx.parser.base import ParseResult, Symbol
-
 
 def test_semantic_import_works() -> None:
     """Module should import without semantic deps installed."""
@@ -20,7 +16,6 @@ def test_semantic_import_works() -> None:
 def test_scorer_with_no_semantic_scores(tmp_path: Path) -> None:
     """score_files without semantic_scores should work normally."""
     from codectx.graph.builder import DepGraph
-    from codectx.ranker.git_meta import GitFileInfo
     from codectx.ranker.scorer import score_files
 
     f1 = tmp_path / "a.py"
@@ -36,7 +31,6 @@ def test_scorer_with_no_semantic_scores(tmp_path: Path) -> None:
 def test_scorer_with_semantic_scores(tmp_path: Path) -> None:
     """score_files with semantic_scores should incorporate them."""
     from codectx.graph.builder import DepGraph
-    from codectx.ranker.git_meta import GitFileInfo
     from codectx.ranker.scorer import score_files
 
     f1 = tmp_path / "a.py"
@@ -58,8 +52,8 @@ def test_scorer_with_semantic_scores(tmp_path: Path) -> None:
 
 def test_pipeline_with_query_no_deps(tmp_path: Path) -> None:
     """Pipeline with --query should gracefully degrade without semantic deps."""
-    from codectx.config.loader import load_config
     from codectx.cli import _run_pipeline
+    from codectx.config.loader import load_config
 
     (tmp_path / "main.py").write_text("print('hello')\n")
 

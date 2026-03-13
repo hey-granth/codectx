@@ -54,7 +54,7 @@ def walk(
 def _collect(
     current: Path,
     root: Path,
-    spec: "object",  # pathspec.PathSpec
+    spec: object,  # pathspec.PathSpec
     out: list[Path],
 ) -> None:
     """Recursively collect files, pruning ignored directories."""
@@ -83,7 +83,7 @@ def _is_binary(path: Path) -> bool:
         return False
     except UnicodeDecodeError:
         return True
-    except (OSError, IOError):
+    except OSError:
         return True  # treat unreadable files as binary
 
 

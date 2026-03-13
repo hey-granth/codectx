@@ -16,7 +16,7 @@ class Symbol:
     docstring: str  # empty string if none
     start_line: int
     end_line: int
-    children: tuple['Symbol', ...] = ()
+    children: tuple[Symbol, ...] = ()
 
 
 @dataclass(frozen=True)

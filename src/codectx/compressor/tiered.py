@@ -85,7 +85,7 @@ def compress_files(
 
     for path in sorted_paths:
         tier = tiers.get(path, 3)
-        
+
         if tier == 1:
             if path.name in ENTRYPOINT_FILENAMES:
                 tier1.append(path)
@@ -93,15 +93,15 @@ def compress_files(
                 tier1.append(path)
                 core_count += 1
             else:
-                tier = 2 # Downgrade to tier 2
+                tier = 2  # Downgrade to tier 2
 
         if tier == 2:
             if supporting_count < MAX_SUPPORTING_MODULES:
                 tier2.append(path)
                 supporting_count += 1
             else:
-                tier = 3 # Downgrade to tier 3
-                
+                tier = 3  # Downgrade to tier 3
+
         if tier == 3:
             tier3.append(path)
 
@@ -233,7 +233,7 @@ def _tier1_content(pr: ParseResult, path: Path, root: Path) -> str:
     rel = path.relative_to(root).as_posix()
     lang = pr.language if pr.language != "unknown" else ""
     header = f"### `{rel}`\n"
-    
+
     source = pr.raw_source
     if path.name in ENTRYPOINT_FILENAMES:
         lines = source.split("\n")

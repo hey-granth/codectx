@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from codectx.graph.builder import DepGraph, build_dependency_graph
+from codectx.graph.builder import build_dependency_graph
 from codectx.parser.base import ParseResult
 
 

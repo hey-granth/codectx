@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from codectx.parser.treesitter import (
-    QuerySpec,
     _get_query_spec,
     _load_query_spec,
     parse_file,

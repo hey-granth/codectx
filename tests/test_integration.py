@@ -126,7 +126,7 @@ def test_deterministic_output(sample_project: Path) -> None:
 
 def test_token_budget_respected(sample_project: Path) -> None:
     """Output should fit within the token budget."""
-    from codectx.compressor.budget import TokenBudget, count_tokens
+    from codectx.compressor.budget import TokenBudget
     from codectx.compressor.tiered import compress_files
     from codectx.graph.builder import build_dependency_graph
     from codectx.output.formatter import format_context

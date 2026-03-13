@@ -6,16 +6,14 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from codectx.config.defaults import CACHE_DIR_NAME
-
 from codectx import __version__
+from codectx.config.defaults import CACHE_DIR_NAME
 
 app = typer.Typer(
     name="codectx",
@@ -47,7 +45,7 @@ def analyze(
         "-o",
         help="Output file path (default: CONTEXT.md).",
     ),
-    since: Optional[str] = typer.Option(
+    since: str | None = typer.Option(
         None,
         "--since",
         help="Include recent changes since this date (e.g. '7 days ago').",
@@ -63,7 +61,7 @@ def analyze(
         "--no-git",
         help="Skip git metadata collection.",
     ),
-    query: Optional[str] = typer.Option(
+    query: str | None = typer.Option(
         None,
         "--query",
         "-q",
@@ -79,7 +77,7 @@ def analyze(
         "--layers",
         help="Generate layered context output.",
     ),
-    extra_roots: Optional[list[Path]] = typer.Option(
+    extra_roots: list[Path] | None = typer.Option(
         None,
         "--extra-root",
         help="Additional root directories for multi-root analysis.",
@@ -180,7 +178,7 @@ def benchmark(
 
     # Rank
     t0 = time.perf_counter()
-    from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
+    from codectx.ranker.git_meta import collect_git_metadata
     from codectx.ranker.scorer import score_files
 
     git_meta = collect_git_metadata(files, config.root, config.no_git)
@@ -299,22 +297,26 @@ def search(
 ) -> None:
     """Search the codebase semantically."""
     _setup_logging(verbose)
-    
+
     try:
         from codectx.ranker.semantic import is_available, semantic_score
+
         if not is_available():
-            console.print("[red]Semantic search is not installed. Run: pip install codectx[semantic][/]")
+            console.print(
+                "[red]Semantic search is not installed. Run: pip install codectx[semantic][/]"
+            )
             raise typer.Exit(1)
-            
-        from codectx.walker import walk
-        from codectx.parser.treesitter import parse_files
-        from codectx.config.loader import load_config
+
         import hashlib
+
         from codectx.cache import Cache
-        
+        from codectx.config.loader import load_config
+        from codectx.parser.treesitter import parse_files
+        from codectx.walker import walk
+
         config = load_config(root)
         files = walk(config.root, config.extra_ignore)
-        
+
         # Parse files with cache
         cache = Cache(config.root)
         parse_results = {}
@@ -329,9 +331,13 @@ def search(
                 parse_results[f] = cached
             else:
                 uncached_files.append(f)
-        
+
         if uncached_files:
-            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,
+            ) as progress:
                 progress.add_task("Parsing uncached files...", total=None)
                 fresh = parse_files(uncached_files)
                 for f, result in fresh.items():
@@ -342,28 +348,30 @@ def search(
                         fhash = ""
                     cache.put_parse_result(f, fhash, result)
             cache.save()
-        
+
         cache_dir = config.root / ".codectx_cache" / "embeddings"
         cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True
+        ) as progress:
             progress.add_task("Computing semantic relevance...", total=None)
             scores = semantic_score(query, files, parse_results, cache_dir)
-            
+
         sorted_files = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        
+
         console.print(f"\n[bold cyan]Search Results for:[/] '{query}'\n")
-        
+
         found = False
         for f, score in sorted_files[:limit]:
             if score > 0.0:
                 rel = f.relative_to(config.root)
                 console.print(f"[bold green]{rel}[/] (score: {score:.3f})")
                 found = True
-                
+
         if not found:
             console.print("[yellow]No relevant files found.[/]")
-            
+
     except Exception as exc:
         console.print(f"[red]Error during search:[/] {exc}")
         raise typer.Exit(1)
@@ -453,6 +461,7 @@ def main(
 
 from dataclasses import dataclass
 
+
 @dataclass
 class PipelineMetrics:
     output_path: Path
@@ -460,7 +469,8 @@ class PipelineMetrics:
     original_tokens: int
     context_tokens: int
 
-def _run_pipeline(config: "object") -> PipelineMetrics:
+
+def _run_pipeline(config: object) -> PipelineMetrics:
     """Run the full codectx pipeline and return the output metrics."""
     import hashlib
 
@@ -470,7 +480,7 @@ def _run_pipeline(config: "object") -> PipelineMetrics:
     from codectx.config.loader import Config
     from codectx.graph.builder import build_dependency_graph
     from codectx.output.formatter import format_context, write_context_file
-    from codectx.parser.treesitter import parse_file, parse_files
+    from codectx.parser.treesitter import parse_files
     from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
     from codectx.ranker.scorer import score_files
     from codectx.safety import confirm_sensitive_files, find_sensitive_files
@@ -607,6 +617,7 @@ def _run_pipeline(config: "object") -> PipelineMetrics:
 
         if config.layers:
             from codectx.output.formatter import write_layer_files
+
             write_layer_files(content_sections, config.root)
             output_path = config.root / "FULL_CONTEXT.md"
             write_context_file(content_sections, output_path)
@@ -620,6 +631,7 @@ def _run_pipeline(config: "object") -> PipelineMetrics:
         progress.update(task, description="Done!")
 
     from codectx.compressor.budget import count_tokens
+
     original_tokens = sum(count_tokens(pr.raw_source) for pr in parse_results.values() if pr)
 
     return PipelineMetrics(

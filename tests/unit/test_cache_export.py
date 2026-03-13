@@ -15,8 +15,8 @@ def populated_cache(tmp_path: Path) -> Path:
     """Create a project with a populated cache."""
     (tmp_path / "main.py").write_text("print('hello')\n")
 
-    from codectx.config.loader import load_config
     from codectx.cli import _run_pipeline
+    from codectx.config.loader import load_config
 
     config = load_config(tmp_path, no_git=True)
     _run_pipeline(config)

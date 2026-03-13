@@ -13,10 +13,9 @@ from codectx.config.defaults import (
     WEIGHT_RECENCY,
 )
 from codectx.graph.builder import DepGraph
+from codectx.parser.base import ParseResult
 from codectx.ranker.git_meta import GitFileInfo
 
-
-from codectx.parser.base import ParseResult
 
 def score_files(
     files: list[Path],
@@ -42,7 +41,7 @@ def score_files(
     """
     if not files:
         return {}
-        
+
     w_freq = WEIGHT_GIT_FREQUENCY
     w_fan = WEIGHT_FAN_IN
     w_rec = WEIGHT_RECENCY
@@ -116,7 +115,7 @@ def score_files(
             raw_sym[f] = float(len(parse_results[f].symbols))
         else:
             raw_sym[f] = 0.0
-            
+
         raw_dir[f] = 1.0 / (1.0 + len(f.parts))
 
     # Min-max normalize each signal

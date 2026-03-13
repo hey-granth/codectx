@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from codectx.compressor.budget import TokenBudget, count_tokens
-from codectx.compressor.tiered import CompressedFile, assign_tiers, compress_files
+from codectx.compressor.tiered import assign_tiers, compress_files
 from codectx.parser.base import ParseResult, Symbol
 
 

@@ -27,7 +27,7 @@ class Cache:
         cache_file = self.cache_dir / "cache.json"
         if cache_file.is_file():
             try:
-                with open(cache_file, "r", encoding="utf-8") as f:
+                with open(cache_file, encoding="utf-8") as f:
                     self._data = json.load(f)
             except (json.JSONDecodeError, OSError) as exc:
                 logger.warning("Cache load failed: %s", exc)
@@ -121,7 +121,7 @@ class Cache:
         logger.info("Cache exported to %s", output)
 
     @classmethod
-    def import_cache(cls, archive: Path, root: Path) -> "Cache":
+    def import_cache(cls, archive: Path, root: Path) -> Cache:
         """Import cache from a tar.gz archive.
 
         Args:

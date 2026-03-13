@@ -6,20 +6,18 @@ from pathlib import Path
 
 from codectx.compressor.budget import TokenBudget
 from codectx.compressor.tiered import CompressedFile
-from codectx.config.defaults import MAX_MERMAID_NODES
+from codectx.config.defaults import ENTRYPOINT_FILENAMES, MAX_MERMAID_NODES
 from codectx.graph.builder import DepGraph
 from codectx.output.sections import (
     ARCHITECTURE,
     CORE_MODULES,
     DEPENDENCY_GRAPH,
     ENTRY_POINTS,
-    SYMBOL_INDEX,
     IMPORTANT_CALL_PATHS,
-    CORE_MODULES,
-    SUPPORTING_MODULES,
     PERIPHERY,
+    SUPPORTING_MODULES,
+    SYMBOL_INDEX,
 )
-from codectx.config.defaults import ENTRYPOINT_FILENAMES
 from codectx.parser.base import ParseResult
 
 
@@ -65,7 +63,7 @@ def format_context(
                 break
             if line.strip():
                 first_p.append(line.strip())
-        
+
         arch_section += " ".join(first_p)[:200]
         arch_section += "\n\n(Architecture truncated. See ARCHITECTURE.md for details.)\n\n"
     else:
@@ -133,20 +131,20 @@ def format_context(
                         count += 1
             if count >= 100:
                 break
-        
+
         if symbol_lines:
             symbol_section += "\n".join(symbol_lines)
         else:
             symbol_section += "*No symbols found within budget.*\n\n"
     else:
         symbol_section += "*No symbol data available.*\n\n"
-        
+
     sections_out[SYMBOL_INDEX.key] = budget.consume_partial(symbol_section)
 
     # --- IMPORTANT_CALL_PATHS ---
     call_paths_section = _section_header(IMPORTANT_CALL_PATHS.title)
     call_paths = dep_graph.detect_call_paths(max_depth=5)
-    
+
     if call_paths and parse_results:
         import_lines = []
         for path in call_paths:
@@ -202,6 +200,7 @@ def format_context(
 
     return sections_out
 
+
 def write_context_file(content: str | dict[str, str], output_path: Path) -> None:
     """Write the assembled context to disk."""
     if isinstance(content, dict):
@@ -210,6 +209,7 @@ def write_context_file(content: str | dict[str, str], output_path: Path) -> None
     else:
         content_str = content
     output_path.write_text(content_str, encoding="utf-8")
+
 
 def write_layer_files(sections: dict[str, str], root: Path) -> None:
     """Write REPO_MAP.md and CORE_CONTEXT.md according to the sections."""
@@ -224,10 +224,10 @@ def write_layer_files(sections: dict[str, str], root: Path) -> None:
         CORE_MODULES.key,
         SUPPORTING_MODULES.key,
     ]
-    
+
     repo_map_content = "".join(sections.get(k, "") for k in repo_map_keys)
     core_context_content = "".join(sections.get(k, "") for k in core_context_keys)
-    
+
     (root / "REPO_MAP.md").write_text(repo_map_content, encoding="utf-8")
     (root / "CORE_CONTEXT.md").write_text(core_context_content, encoding="utf-8")
 
@@ -251,19 +251,16 @@ def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str:
         top = parts[0] if len(parts) > 1 else "."
         dirs[top] = dirs.get(top, 0) + 1
 
-    lines: list[str] = [
-        "A python-based project composed of the following subsystems:",
-        ""
-    ]
-    
+    lines: list[str] = ["A python-based project composed of the following subsystems:", ""]
+
     # Sort and take top 5 most populated directories to keep it under 10 lines
     top_dirs = sorted(dirs.items(), key=lambda x: -x[1])[:5]
     for d, count in top_dirs:
         if d != ".":
             lines.append(f"- **{d}/**: Primary subsystem containing {count} files")
-            
+
     if "." in dirs:
-        lines.append(f"- **Root**: Contains scripts and execution points")
+        lines.append("- **Root**: Contains scripts and execution points")
 
     return "\n".join(lines)
 
@@ -278,15 +275,29 @@ def _render_mermaid_graph(
     Limited to top N ranked modules to keep the diagram readable.
     """
     # Exclude tests, configs, docs, queries, and build artifacts
-    exclude_parts = {"tests", "test", "docs", "doc", "config", "configs", "queries", "build", "dist"}
-    
+    exclude_parts = {
+        "tests",
+        "test",
+        "docs",
+        "doc",
+        "config",
+        "configs",
+        "queries",
+        "build",
+        "dist",
+    }
+
     valid_files = []
     for cf in sorted(compressed, key=lambda cf: (-cf.score, cf.path.as_posix())):
         rel = cf.path.relative_to(root).as_posix()
         parts = set(rel.split("/"))
-        if not parts.intersection(exclude_parts) and not rel.endswith(".scm") and not rel.endswith(".md"):
+        if (
+            not parts.intersection(exclude_parts)
+            and not rel.endswith(".scm")
+            and not rel.endswith(".md")
+        ):
             valid_files.append(cf)
-            
+
     # Use the first MAX_MERMAID_NODES files by score
     top_files = valid_files[:MAX_MERMAID_NODES]
 

@@ -154,11 +154,11 @@ class DepGraph:
         for entry in entries:
             current = entry
             path = [current]
-            
+
             idx = self.path_to_idx.get(current)
             if idx is None:
                 continue
-                
+
             visited = {idx}
 
             for _ in range(max_depth - 1):

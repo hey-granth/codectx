@@ -66,7 +66,6 @@ def semantic_score(
         )
 
     import lancedb
-    import pyarrow as pa
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(_DEFAULT_MODEL)
