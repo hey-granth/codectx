@@ -1,0 +1,37 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    
+    # Required permissions for PyPI Trusted Publishing
+    permissions:
+      id-token: write  # This permission is required for trusted publishing
+      contents: read   # Required to checkout the repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # Can use any supported stable version for the build
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      # Publish using PyPI Trusted Publishing.
+      # Note: No API token or secret is needed securely provided the repository is linked in PyPI settings
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
