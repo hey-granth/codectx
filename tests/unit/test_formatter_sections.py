@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codectx.compressor.budget import TokenBudget
 from codectx.compressor.tiered import CompressedFile
 from codectx.graph.builder import DepGraph
 from codectx.output.formatter import format_context
@@ -12,12 +11,10 @@ from codectx.output.formatter import format_context
 
 def test_sections_always_present_in_order(tmp_path: Path) -> None:
     """Formatter should always emit all canonical sections in fixed order."""
-    budget = TokenBudget(10_000)
     content = format_context(
         compressed=[],
         dep_graph=DepGraph(),
         root=tmp_path,
-        budget=budget,
     )
 
     headers = [
@@ -51,13 +48,11 @@ def test_formatter_is_deterministic_for_same_inputs(tmp_path: Path) -> None:
         compressed=[cf],
         dep_graph=graph,
         root=tmp_path,
-        budget=TokenBudget(10_000),
     )
     out2 = format_context(
         compressed=[cf],
         dep_graph=graph,
         root=tmp_path,
-        budget=TokenBudget(10_000),
     )
 
     assert out1 == out2

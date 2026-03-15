@@ -116,7 +116,7 @@ def analyze(
         Panel(
             f"[bold green]✓[/] Context written to [bold]{metrics.output_path}[/]\n\n"
             f"[bold]Files scanned:[/] {metrics.files_scanned:,}\n"
-            f"[bold]Original tokens:[/] {metrics.original_tokens:,}\n"
+            f"[bold]Source tokens (excl. tests/docs):[/] {metrics.original_tokens:,}\n"
             f"[bold]Context tokens:[/] {metrics.context_tokens:,}\n"
             f"[bold]Compression ratio:[/] {ratio:.1f}x\n"
             f"[bold]Analysis time:[/] {elapsed:.1f}s",
@@ -611,7 +611,6 @@ def _run_pipeline(config: object) -> PipelineMetrics:
             compressed=compressed,
             dep_graph=dep_graph,
             root=config.root,
-            budget=budget,
             architecture_text=arch_text,
             roots=config.roots if len(config.roots) > 1 else None,
             parse_results=parse_results,

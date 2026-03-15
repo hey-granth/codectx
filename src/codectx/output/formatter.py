@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codectx.compressor.budget import TokenBudget
 from codectx.compressor.tiered import CompressedFile
 from codectx.config.defaults import ENTRYPOINT_FILENAMES, MAX_MERMAID_NODES
 from codectx.graph.builder import DepGraph
@@ -15,6 +14,7 @@ from codectx.output.sections import (
     ENTRY_POINTS,
     IMPORTANT_CALL_PATHS,
     PERIPHERY,
+    RANKED_FILES,
     SUPPORTING_MODULES,
     SYMBOL_INDEX,
 )
@@ -38,14 +38,13 @@ def format_context(
     compressed: list[CompressedFile],
     dep_graph: DepGraph,
     root: Path,
-    budget: TokenBudget,
     architecture_text: str = "",
     roots: list[Path] | None = None,
     parse_results: dict[Path, ParseResult] | None = None,
 ) -> dict[str, str]:
     """Assemble the full CONTEXT.md content.
 
-    Sections are emitted in the canonical order and consume the token budget.
+    Sections are emitted in the canonical order.
     """
     sections_out: dict[str, str] = {}
 
@@ -68,7 +67,7 @@ def format_context(
         arch_section += "\n\n(Architecture truncated. See ARCHITECTURE.md for details.)\n\n"
     else:
         arch_section += _auto_architecture(compressed, root) + "\n\n"
-    sections_out[ARCHITECTURE.key] = budget.consume_partial(arch_section)
+    sections_out[ARCHITECTURE.key] = arch_section
 
     # --- DEPENDENCY_GRAPH ---
     graph_section = _section_header(DEPENDENCY_GRAPH.title)
@@ -86,7 +85,7 @@ def format_context(
             chain = " -> ".join(f"`{r}`" for r in rel_paths)
             graph_section += f"{i}. {chain}\n"
         graph_section += "\n"
-    sections_out[DEPENDENCY_GRAPH.key] = budget.consume_partial(graph_section)
+    sections_out[DEPENDENCY_GRAPH.key] = graph_section
 
     # --- ENTRY_POINTS & CORE_MODULES ---
     entry_files = []
@@ -104,42 +103,44 @@ def format_context(
             entry_section += cf.content + "\n"
     else:
         entry_section += "*No entry points identified within budget.*\n\n"
-    sections_out[ENTRY_POINTS.key] = budget.consume_partial(entry_section)
+    sections_out[ENTRY_POINTS.key] = entry_section
 
     # --- SYMBOL_INDEX ---
     symbol_section = _section_header(SYMBOL_INDEX.title)
     if parse_results:
-        symbol_lines = []
-        count = 0
+        sym_lines: list[str] = []
+        sym_count = 0
         for cf in compressed:
-            if cf.tier in (1, 2) and cf.path in parse_results:
-                pr = parse_results[cf.path]
-                if pr.symbols:
-                    # Collect symbols
-                    for sym in pr.symbols:
-                        if count >= 100:
-                            break
-                        symbol_lines.append(sym.name)
-                        if getattr(sym, "children", None):
-                            for child in sym.children:
-                                symbol_lines.append(f"  {child.name}()")
-                        else:
-                            # if it's a function without children, just print it?
-                            if sym.kind in ("function", "method"):
-                                symbol_lines[-1] += "()"
-                        symbol_lines.append("")
-                        count += 1
-            if count >= 100:
+            if cf.tier not in (1, 2):
+                continue
+            pr = parse_results.get(cf.path)
+            if not pr or not pr.symbols:
+                continue
+            rel = cf.path.relative_to(root).as_posix()
+            sym_lines.append(f"**`{rel}`**")
+            for sym in pr.symbols:
+                if sym_count >= 150:
+                    break
+                clean_name = sym.name.strip()
+                if not clean_name or "\n" in clean_name or len(clean_name) > 100:
+                    continue
+                if sym.kind == "class":
+                    sym_lines.append(f"- class `{clean_name}`")
+                    for child in getattr(sym, "children", ()):
+                        child_name = child.name.strip()
+                        if child_name and "\n" not in child_name:
+                            sym_lines.append(f"  - `{child_name}()`")
+                else:
+                    sym_lines.append(f"- `{clean_name}()`")
+                sym_count += 1
+            sym_lines.append("")
+            if sym_count >= 150:
                 break
-
-        if symbol_lines:
-            symbol_section += "\n".join(symbol_lines)
-        else:
-            symbol_section += "*No symbols found within budget.*\n\n"
+        symbol_section += "\n".join(sym_lines) if sym_lines else "*No symbols found within budget.*\n"
     else:
-        symbol_section += "*No symbol data available.*\n\n"
-
-    sections_out[SYMBOL_INDEX.key] = budget.consume_partial(symbol_section)
+        symbol_section += "*No symbol data available.*\n"
+    symbol_section += "\n"
+    sections_out[SYMBOL_INDEX.key] = symbol_section
 
     # --- IMPORTANT_CALL_PATHS ---
     call_paths_section = _section_header(IMPORTANT_CALL_PATHS.title)
@@ -167,7 +168,7 @@ def format_context(
     else:
         call_paths_section += "*No call paths detected.*\n\n"
 
-    sections_out[IMPORTANT_CALL_PATHS.key] = budget.consume_partial(call_paths_section)
+    sections_out[IMPORTANT_CALL_PATHS.key] = call_paths_section
 
     core_section = _section_header(CORE_MODULES.title)
     if core_files:
@@ -175,7 +176,7 @@ def format_context(
             core_section += cf.content + "\n"
     else:
         core_section += "*No core modules selected within budget.*\n\n"
-    sections_out[CORE_MODULES.key] = budget.consume_partial(core_section)
+    sections_out[CORE_MODULES.key] = core_section
 
     # --- SUPPORTING_MODULES ---
     supporting_files = [cf for cf in compressed if cf.tier == 2]
@@ -185,7 +186,19 @@ def format_context(
             supp_section += cf.content + "\n"
     else:
         supp_section += "*No supporting modules selected within budget.*\n\n"
-    sections_out[SUPPORTING_MODULES.key] = budget.consume_partial(supp_section)
+    sections_out[SUPPORTING_MODULES.key] = supp_section
+
+    # --- RANKED_FILES ---
+    ranked_section = _section_header(RANKED_FILES.title)
+    ranked_section += "| File | Score | Tier | Tokens |\n"
+    ranked_section += "|------|-------|------|--------|\n"
+    tier_label = {1: "full/capped", 2: "signatures", 3: "summary"}
+    for cf in sorted(compressed, key=lambda x: (-x.score, x.path.as_posix()))[:40]:
+        rel = cf.path.relative_to(root).as_posix()
+        label = tier_label.get(cf.tier, str(cf.tier))
+        ranked_section += f"| `{rel}` | {cf.score:.3f} | {label} | {cf.token_count} |\n"
+    ranked_section += "\n"
+    sections_out[RANKED_FILES.key] = ranked_section
 
     # --- PERIPHERY ---
     periph_files = [cf for cf in compressed if cf.tier == 3]
@@ -196,16 +209,26 @@ def format_context(
         periph_section += "\n"
     else:
         periph_section += "*No periphery files selected within budget.*\n\n"
-    sections_out[PERIPHERY.key] = budget.consume_partial(periph_section)
+    sections_out[PERIPHERY.key] = periph_section
 
     return sections_out
 
 
 def write_context_file(content: str | dict[str, str], output_path: Path) -> None:
-    """Write the assembled context to disk."""
+    """Write the assembled context to disk in canonical section order."""
     if isinstance(content, dict):
-        # preserve section order from output logic
-        content_str = "".join(content.values())
+        from codectx.output.sections import SECTION_ORDER
+
+        ordered = []
+        for section in SECTION_ORDER:
+            if section.key in content:
+                ordered.append(content[section.key])
+        # append any keys not in SECTION_ORDER (future-proofing)
+        known_keys = {s.key for s in SECTION_ORDER}
+        for key, val in content.items():
+            if key not in known_keys:
+                ordered.append(val)
+        content_str = "".join(ordered)
     else:
         content_str = content
     output_path.write_text(content_str, encoding="utf-8")
@@ -219,6 +242,7 @@ def write_layer_files(sections: dict[str, str], root: Path) -> None:
         SYMBOL_INDEX.key,
         IMPORTANT_CALL_PATHS.key,
         DEPENDENCY_GRAPH.key,
+        "ranked_files",
     ]
     core_context_keys = [
         CORE_MODULES.key,

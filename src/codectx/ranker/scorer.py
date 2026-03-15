@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from codectx.graph.builder import DepGraph
 from codectx.parser.base import ParseResult
 from codectx.ranker.git_meta import GitFileInfo
 
+_logger = logging.getLogger(__name__)
+
 
 def score_files(
     files: list[Path],
@@ -28,9 +31,9 @@ def score_files(
     """Score each file 0.0–1.0 using a weighted composite.
 
     Signals:
-        git_frequency  (0.35): normalized commit count
-        fan_in         (0.35): normalized in-degree
-        recency        (0.20): normalized days since last modification
+        git_frequency  (0.40): normalized commit count
+        fan_in         (0.40): normalized in-degree
+        recency        (0.10): normalized days since last modification
         entry_proximity(0.10): normalized graph distance from entry points
 
     If semantic_scores are provided (from --query), a 5th signal is added
@@ -50,14 +53,25 @@ def score_files(
     w_dir = 0.0
 
     if task == "debug":
-        w_rec = 0.5
-        w_fan = 0.2
+        # Recent changes matter most for debugging.
+        w_freq = 0.20
+        w_fan = 0.20
+        w_rec = 0.50
+        w_prox = 0.10
     elif task == "feature":
+        # Fan-in (heavily imported) + symbol density matters.
+        w_freq = 0.20
         w_fan = 0.5
-        w_sym = 0.2
+        w_rec = 0.10
+        w_prox = 0.10
+        w_sym = 0.10
     elif task == "architecture":
+        # Pure structural: fan-in and entry proximity dominate.
+        w_freq = 0.10
         w_fan = 0.6
-        w_dir = 0.2
+        w_rec = 0.05
+        w_prox = 0.15
+        w_dir = 0.10
 
     # normalize weights
     total_w = w_freq + w_fan + w_rec + w_prox + w_sym + w_dir
@@ -117,6 +131,13 @@ def score_files(
             raw_sym[f] = 0.0
 
         raw_dir[f] = 1.0 / (1.0 + len(f.parts))
+
+    if raw_freq and max(raw_freq.values()) == 0.0:
+        _logger.warning(
+            "Git frequency signal is flat (all commit counts are zero). "
+            "Ranking will rely on dependency graph structure only. "
+            "For better results, run on a repo with full git history or use --no-git explicitly."
+        )
 
     # Min-max normalize each signal
     norm_freq = _min_max_normalize(raw_freq)

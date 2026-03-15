@@ -8,11 +8,7 @@ from pathlib import Path
 from codectx.compressor.budget import TokenBudget, count_tokens
 from codectx.config.defaults import (
     ENTRYPOINT_FILENAMES,
-    MAX_CORE_MODULES,
     MAX_ENTRYPOINT_LINES,
-    MAX_SUPPORTING_MODULES,
-    TIER1_THRESHOLD,
-    TIER2_THRESHOLD,
 )
 from codectx.parser.base import ParseResult
 
@@ -29,20 +25,56 @@ class CompressedFile:
     language: str
 
 
+_NON_SOURCE_DIRS: frozenset[str] = frozenset(
+    {
+        "tests",
+        "test",
+        "docs",
+        "doc",
+        "examples",
+        "example",
+        "benchmarks",
+        "benchmark",
+        "scripts",
+        "script",
+    }
+)
+
+
+def _is_non_source(path: Path, root: Path) -> bool:
+    """Return True if the file lives under a non-source directory."""
+    try:
+        parts = set(path.relative_to(root).parts)
+    except ValueError:
+        return False
+    return bool(parts.intersection(_NON_SOURCE_DIRS))
+
+
 def assign_tiers(
     scores: dict[Path, float],
 ) -> dict[Path, int]:
-    """Assign tier to each file based on its score.
+    """Assign tiers by score percentile.
 
-    Tier 1 (score > 0.7): full source
-    Tier 2 (0.3–0.7): signatures + docstrings
-    Tier 3 (< 0.3): one-line summary
+    Top 15% -> Tier 1, next 30% -> Tier 2, rest -> Tier 3.
+    Ties at the threshold are promoted into the higher tier.
     """
+    if not scores:
+        return {}
+
+    sorted_scores = sorted(scores.values(), reverse=True)
+    n = len(sorted_scores)
+
+    tier1_cutoff_idx = max(1, int(n * 0.15))
+    tier2_cutoff_idx = max(2, int(n * 0.45))
+
+    tier1_threshold = sorted_scores[tier1_cutoff_idx - 1]
+    tier2_threshold = sorted_scores[min(tier2_cutoff_idx - 1, n - 1)]
+
     tiers: dict[Path, int] = {}
     for path, score in scores.items():
-        if score > TIER1_THRESHOLD:
+        if score >= tier1_threshold:
             tiers[path] = 1
-        elif score >= TIER2_THRESHOLD:
+        elif score >= tier2_threshold:
             tiers[path] = 2
         else:
             tiers[path] = 3
@@ -69,6 +101,11 @@ def compress_files(
     """
     tiers = assign_tiers(scores)
 
+    # Force non-source files to Tier 3 regardless of score
+    for path in list(tiers.keys()):
+        if _is_non_source(path, root):
+            tiers[path] = 3
+
     # Group and sort files by score, then path
     def sort_key(p: Path) -> tuple[float, str]:
         return (-scores.get(p, 0.0), p.as_posix())
@@ -79,30 +116,13 @@ def compress_files(
     tier2: list[Path] = []
     tier3: list[Path] = []
 
-    # Apply limits to Tier 1 and Tier 2 based on limits
-    core_count = 0
-    supporting_count = 0
-
     for path in sorted_paths:
         tier = tiers.get(path, 3)
-
         if tier == 1:
-            if path.name in ENTRYPOINT_FILENAMES:
-                tier1.append(path)
-            elif core_count < MAX_CORE_MODULES:
-                tier1.append(path)
-                core_count += 1
-            else:
-                tier = 2  # Downgrade to tier 2
-
-        if tier == 2:
-            if supporting_count < MAX_SUPPORTING_MODULES:
-                tier2.append(path)
-                supporting_count += 1
-            else:
-                tier = 3  # Downgrade to tier 3
-
-        if tier == 3:
+            tier1.append(path)
+        elif tier == 2:
+            tier2.append(path)
+        else:
             tier3.append(path)
 
     result: list[CompressedFile] = []
