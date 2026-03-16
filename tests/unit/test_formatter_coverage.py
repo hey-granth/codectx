@@ -13,15 +13,9 @@ def test_format_context_basic(tmp_path: Path) -> None:
     f1.write_text("print('hi')\n")
     res = {f1: make_plaintext_result(f1, "print('hi')\n")}
     graph = DepGraph(res)
-    scores = {f1: 1.0}
-    tokens = {f1: 10}
 
-    # We need to mock TokenBudget? No, None is not allowed, it expects TokenBudget.
-    # Wait, in formatter.py: `def format_context(compressed: list[CompressedFile], dep_graph, ... budget...)`
-    from codectx.compressor.budget import TokenBudget
     from codectx.compressor.tiered import CompressedFile
 
-    budget = TokenBudget(1000)
     cf = CompressedFile(
         tier=1, token_count=10, content="print('hi')", path=f1, score=1.0, language="python"
     )
@@ -30,7 +24,6 @@ def test_format_context_basic(tmp_path: Path) -> None:
         compressed=[cf],
         dep_graph=graph,
         root=tmp_path,
-        budget=budget,
         parse_results=res,
     )
 

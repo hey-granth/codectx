@@ -19,7 +19,7 @@ def test_parse_typescript(tmp_path: Path) -> None:
     f.write_text("class B { method(): void {} }\nfunction f2(): void {}\n")
     res = parse_files([f])
     assert f in res
-    pr = res[f]
+    _ = res[f]
     assert len(res[f].symbols) >= 0
 
 

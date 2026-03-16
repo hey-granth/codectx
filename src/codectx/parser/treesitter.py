@@ -427,7 +427,7 @@ def _python_func_symbol(node: Any, source: str, kind: str) -> Symbol:
 
     for child in node.children:
         if child.type == "identifier":
-            name = _node_text(child, source)
+            name = _node_text(child, source).split()[0].strip()
         elif child.type == "parameters":
             sig_parts.append(_node_text(child, source))
         elif child.type == "type":
@@ -466,7 +466,7 @@ def _python_class_symbol(node: Any, source: str) -> Symbol:
 
     for child in node.children:
         if child.type == "identifier":
-            name = _node_text(child, source)
+            name = _node_text(child, source).split()[0].strip()
         elif child.type == "argument_list":
             bases = _node_text(child, source)
 
@@ -574,7 +574,7 @@ def _go_func_symbol(node: Any, source: str, kind: str = "function") -> Symbol:
     name = ""
     for child in node.children:
         if child.type in ("identifier", "field_identifier"):
-            name = _node_text(child, source)
+            name = _node_text(child, source).split()[0].strip()
             break
 
     first_line = _node_text(node, source).split("\n")[0].rstrip(" {")
@@ -593,7 +593,7 @@ def _generic_symbol(node: Any, source: str, kind: str) -> Symbol:
     name = ""
     for child in node.children:
         if child.type in ("identifier", "name", "type_identifier"):
-            name = _node_text(child, source)
+            name = _node_text(child, source).split()[0].strip()
             break
 
     first_line = _node_text(node, source).split("\n")[0]
@@ -625,7 +625,8 @@ def _walk_tree(node: Any) -> list[Any]:
 
 def _node_text(node: Any, source: str) -> str:
     """Get the source text for a tree-sitter node."""
-    return source[node.start_byte : node.end_byte]
+    source_bytes = source.encode("utf-8")
+    return source_bytes[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 def _find_child(node: Any, child_type: str) -> Any | None:

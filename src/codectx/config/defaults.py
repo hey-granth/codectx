@@ -27,6 +27,20 @@ ALWAYS_IGNORE: tuple[str, ...] = (
     "dist",
     "build",
     "coverage",
+    "cargo.toml",
+    "cargo.lock",
+    "pyproject.toml",
+    "package.json",
+    "package-lock.json",
+    "uv.lock",
+    "ruff_cache",
+    "pytest_cache",
+    ".env",
+    ".env.*",
+    "LICENSE",
+    "LICENCE",
+    "assets",
+    "go.sum",
 )
 
 # ---------------------------------------------------------------------------
@@ -40,18 +54,11 @@ TIKTOKEN_ENCODING: str = "cl100k_base"
 # Scoring weights (must sum to 1.0)
 # ---------------------------------------------------------------------------
 
-WEIGHT_GIT_FREQUENCY: float = 0.35
-WEIGHT_FAN_IN: float = 0.35
-WEIGHT_RECENCY: float = 0.20
+WEIGHT_GIT_FREQUENCY: float = 0.40
+WEIGHT_FAN_IN: float = 0.40
+WEIGHT_RECENCY: float = 0.10
 WEIGHT_ENTRY_PROXIMITY: float = 0.10
 CYCLE_PENALTY: float = 0.10
-
-# ---------------------------------------------------------------------------
-# Tier thresholds
-# ---------------------------------------------------------------------------
-
-TIER1_THRESHOLD: float = 0.7
-TIER2_THRESHOLD: float = 0.3
 
 # ---------------------------------------------------------------------------
 # Entry-point filename patterns (basename matching)
@@ -80,6 +87,11 @@ ENTRYPOINT_FILENAMES: frozenset[str] = frozenset(
         # Java
         "Main.java",
         "Application.java",
+        # C / C++
+        "main.c",
+        "main.cc",
+        "main.cpp",
+        "main.cxx",
         # Ruby
         "Rakefile",
         "config.ru",
@@ -125,8 +137,6 @@ MAX_MERMAID_NODES: int = 25
 # Strict section limits
 # ---------------------------------------------------------------------------
 
-MAX_CORE_MODULES: int = 10
-MAX_SUPPORTING_MODULES: int = 20
 MAX_ENTRYPOINT_LINES: int = 300
 
 # ---------------------------------------------------------------------------

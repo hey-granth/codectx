@@ -22,6 +22,7 @@ IMPORTANT_CALL_PATHS = Section(key="important_call_paths", title="IMPORTANT_CALL
 CORE_MODULES = Section(key="core_modules", title="CORE_MODULES")
 SUPPORTING_MODULES = Section(key="supporting_modules", title="SUPPORTING_MODULES")
 DEPENDENCY_GRAPH = Section(key="dependency_graph", title="DEPENDENCY_GRAPH")
+RANKED_FILES = Section(key="ranked_files", title="RANKED_FILES")
 PERIPHERY = Section(key="periphery", title="PERIPHERY")
 
 # Ordered list for iteration
@@ -33,5 +34,6 @@ SECTION_ORDER: tuple[Section, ...] = (
     CORE_MODULES,
     SUPPORTING_MODULES,
     DEPENDENCY_GRAPH,
+    RANKED_FILES,
     PERIPHERY,
 )

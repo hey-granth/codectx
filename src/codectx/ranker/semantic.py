@@ -110,7 +110,7 @@ def semantic_score(
     # Create table with embeddings
     data = [
         {"path": p, "text": t, "vector": e.tolist()}
-        for p, t, e in zip(doc_paths, documents, doc_embeddings)
+        for p, t, e in zip(doc_paths, documents, doc_embeddings, strict=False)
     ]
 
     table_name = "files"

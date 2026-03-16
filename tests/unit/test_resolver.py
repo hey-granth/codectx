@@ -32,6 +32,19 @@ def test_resolve_python_absolute(tmp_path: Path) -> None:
     assert res == [f2]
 
 
+def test_resolve_python_absolute_src_layout(tmp_path: Path) -> None:
+    pkg = tmp_path / "src" / "pkg"
+    pkg.mkdir(parents=True)
+    f1 = pkg / "a.py"
+    f2 = pkg / "b.py"
+    f1.write_text("")
+    f2.write_text("")
+    all_f = frozenset(["src/pkg/a.py", "src/pkg/b.py"])
+
+    res = resolve_import("import pkg.b", "python", f1, tmp_path, all_f)
+    assert res == [f2]
+
+
 def test_resolve_js_ts(tmp_path: Path) -> None:
     f1 = tmp_path / "a.js"
     f2 = tmp_path / "b.js"

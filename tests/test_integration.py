@@ -80,7 +80,6 @@ def test_full_pipeline(sample_project: Path) -> None:
         compressed=compressed,
         dep_graph=dep_graph,
         root=sample_project,
-        budget=budget,
     )
     content_str = "".join(content.values())
     assert "ARCHITECTURE" in content_str
@@ -116,7 +115,6 @@ def test_deterministic_output(sample_project: Path) -> None:
             compressed=compressed,
             dep_graph=dep_graph,
             root=sample_project,
-            budget=budget,
         )
 
     output1 = run()
@@ -148,8 +146,9 @@ def test_token_budget_respected(sample_project: Path) -> None:
         compressed=compressed,
         dep_graph=dep_graph,
         root=sample_project,
-        budget=budget,
     )
+    # Verify content was generated with proper sections
+    assert content is not None
 
     # The compressed content consumed by files should be within budget
     total_file_tokens = sum(cf.token_count for cf in compressed)

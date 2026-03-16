@@ -46,7 +46,7 @@ def test_round_trip(populated_cache: Path, tmp_path: Path) -> None:
     fresh_root = tmp_path / "fresh_project"
     fresh_root.mkdir()
 
-    imported_cache = Cache.import_cache(archive, fresh_root)
+    _ = Cache.import_cache(archive, fresh_root)
 
     # Verify cache data was restored
     cache_file = fresh_root / ".codectx_cache" / "cache.json"
