@@ -113,10 +113,7 @@ def score_files(
         raw_freq[f] = float(info.commit_count) if info else 0.0
         raw_fan_in[f] = float(dep_graph.fan_in(f))
 
-        if info:
-            days_since = max((now - info.last_modified_ts) / 86400.0, 0.0)
-        else:
-            days_since = 365.0
+        days_since = max((now - info.last_modified_ts) / 86400.0, 0.0) if info else 365.0
         raw_recency[f] = 1.0 / (1.0 + days_since)
 
         dist = entry_distances.get(f)

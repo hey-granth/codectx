@@ -27,6 +27,20 @@ ALWAYS_IGNORE: tuple[str, ...] = (
     "dist",
     "build",
     "coverage",
+    "cargo.toml",
+    "cargo.lock",
+    "pyproject.toml",
+    "package.json",
+    "package-lock.json",
+    "uv.lock",
+    "ruff_cache",
+    "pytest_cache",
+    ".env",
+    ".env.*",
+    "LICENSE",
+    "LICENCE",
+    "assets",
+    "go.sum",
 )
 
 # ---------------------------------------------------------------------------
@@ -73,6 +87,11 @@ ENTRYPOINT_FILENAMES: frozenset[str] = frozenset(
         # Java
         "Main.java",
         "Application.java",
+        # C / C++
+        "main.c",
+        "main.cc",
+        "main.cpp",
+        "main.cxx",
         # Ruby
         "Rakefile",
         "config.ru",

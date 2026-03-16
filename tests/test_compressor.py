@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from codectx.compressor.budget import TokenBudget, count_tokens
-from codectx.compressor.tiered import assign_tiers, compress_files
+from codectx.compressor.tiered import _extract_internal_imports, assign_tiers, compress_files
 from codectx.parser.base import ParseResult, Symbol
 
 
@@ -125,7 +125,6 @@ def test_compress_files_tight_budget(
     compressed = compress_files(sample_parse_results, scores, budget, Path("/repo"))
 
     # Tier 3 may be dropped
-    tiers = {cf.tier for cf in compressed}
     # At minimum, tier 1 should be present (possibly truncated)
     assert any(cf.tier == 1 for cf in compressed)
 
@@ -157,3 +156,21 @@ def test_compressed_output_sorted(
             -b.score,
             b.path.as_posix(),
         )
+
+
+def test_extract_internal_imports_uses_source_package_in_src_layout(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    pkg_a = src / "a"
+    pkg_z = src / "z"
+    pkg_a.mkdir(parents=True)
+    pkg_z.mkdir(parents=True)
+
+    source = pkg_z / "mod.py"
+    target = pkg_z / "helpers.py"
+    source.write_text("from z import helpers\n")
+    target.write_text("")
+
+    imports = ("from z import helpers",)
+    modules = _extract_internal_imports(imports, tmp_path, source)
+
+    assert modules == ["helpers"]

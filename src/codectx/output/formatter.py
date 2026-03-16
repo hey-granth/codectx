@@ -136,7 +136,9 @@ def format_context(
             sym_lines.append("")
             if sym_count >= 150:
                 break
-        symbol_section += "\n".join(sym_lines) if sym_lines else "*No symbols found within budget.*\n"
+        symbol_section += (
+            "\n".join(sym_lines) if sym_lines else "*No symbols found within budget.*\n"
+        )
     else:
         symbol_section += "*No symbol data available.*\n"
     symbol_section += "\n"
@@ -192,10 +194,19 @@ def format_context(
     ranked_section = _section_header(RANKED_FILES.title)
     ranked_section += "| File | Score | Tier | Tokens |\n"
     ranked_section += "|------|-------|------|--------|\n"
-    tier_label = {1: "full/capped", 2: "signatures", 3: "summary"}
+
+    def tier_label(cf: CompressedFile) -> str:
+        if cf.tier == 1:
+            return "full source" if cf.path.name in ENTRYPOINT_FILENAMES else "structured summary"
+        if cf.tier == 2:
+            return "signatures"
+        if cf.tier == 3:
+            return "one-liner"
+        return str(cf.tier)
+
     for cf in sorted(compressed, key=lambda x: (-x.score, x.path.as_posix()))[:40]:
         rel = cf.path.relative_to(root).as_posix()
-        label = tier_label.get(cf.tier, str(cf.tier))
+        label = tier_label(cf)
         ranked_section += f"| `{rel}` | {cf.score:.3f} | {label} | {cf.token_count} |\n"
     ranked_section += "\n"
     sections_out[RANKED_FILES.key] = ranked_section
@@ -267,6 +278,8 @@ def _section_header(title: str) -> str:
 
 def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str:
     """Generate a simple, compressed architecture summary from the file list."""
+    lang_counts: dict[str, int] = {}
+
     # Group files by top-level directory
     dirs: dict[str, int] = {}
     for cf in compressed:
@@ -275,7 +288,17 @@ def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str:
         top = parts[0] if len(parts) > 1 else "."
         dirs[top] = dirs.get(top, 0) + 1
 
-    lines: list[str] = ["A python-based project composed of the following subsystems:", ""]
+        lang = str(getattr(cf, "language", "")).strip().lower()
+        if lang and lang != "unknown":
+            lang_counts[lang] = lang_counts.get(lang, 0) + 1
+
+    if len(lang_counts) == 1:
+        dominant_language = max(lang_counts.items(), key=lambda x: (x[1], x[0]))[0]
+        opening = f"A {dominant_language}-based project composed of the following subsystems:"
+    else:
+        opening = "A software project composed of the following subsystems:"
+
+    lines: list[str] = [opening, ""]
 
     # Sort and take top 5 most populated directories to keep it under 10 lines
     top_dirs = sorted(dirs.items(), key=lambda x: -x[1])[:5]

@@ -162,7 +162,7 @@ def _resolve_python(
 
     # Determine base directory
     try:
-        source_rel = source_file.relative_to(root)
+        _ = source_file.relative_to(root)
     except ValueError:
         return []  # Source file outside root?
 

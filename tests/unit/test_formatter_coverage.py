@@ -13,8 +13,6 @@ def test_format_context_basic(tmp_path: Path) -> None:
     f1.write_text("print('hi')\n")
     res = {f1: make_plaintext_result(f1, "print('hi')\n")}
     graph = DepGraph(res)
-    scores = {f1: 1.0}
-    tokens = {f1: 10}
 
     from codectx.compressor.tiered import CompressedFile
 

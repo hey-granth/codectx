@@ -127,10 +127,13 @@ def compress_files(
 
     result: list[CompressedFile] = []
 
-    # Process Tier 1 — full source
+    # Process Tier 1 — full source for entry points, structured summary otherwise
     for path in tier1:
         pr = parse_results[path]
-        content = _tier1_content(pr, path, root)
+        if path.name in ENTRYPOINT_FILENAMES:
+            content = _tier1_content(pr, path, root)
+        else:
+            content = _structured_summary_content(pr, path, root)
         tokens = count_tokens(content)
 
         if budget.remaining >= tokens:
@@ -264,6 +267,390 @@ def _tier1_content(pr: ParseResult, path: Path, root: Path) -> str:
     return f"{header}\n```{lang}\n{source}\n```\n"
 
 
+def _extract_internal_imports(imports: tuple[str, ...], root: Path, source_path: Path) -> list[str]:
+    """Extract deterministic internal module identifiers from raw import strings."""
+    try:
+        src_dir = root / "src"
+        package_name = ""
+        package_root = root
+
+        if src_dir.is_dir():
+            try:
+                rel_to_src = source_path.relative_to(src_dir)
+                if rel_to_src.parts:
+                    candidate = rel_to_src.parts[0]
+                    if candidate.isidentifier():
+                        package_name = candidate
+                        package_root = src_dir / candidate
+            except Exception:
+                pass
+
+        if not package_name:
+            try:
+                rel = source_path.relative_to(root)
+                if rel.parts:
+                    candidate = rel.parts[0]
+                    if candidate.isidentifier():
+                        package_name = candidate
+                        package_root = root / package_name
+            except Exception:
+                package_name = ""
+
+        if not package_name:
+            return []
+
+        try:
+            rel_to_pkg = source_path.relative_to(package_root)
+            mod_parts = list(rel_to_pkg.with_suffix("").parts)
+            current_pkg_parts = mod_parts[:-1]
+        except Exception:
+            current_pkg_parts = []
+
+        def normalize_name(name: str) -> str:
+            return name.strip().split(" as ", 1)[0].strip()
+
+        def is_module_like(name: str) -> bool:
+            if not name or name == "*":
+                return False
+            cleaned = name.replace("_", "")
+            return cleaned.isalnum() and name == name.lower()
+
+        def strip_pkg_prefix(module_name: str) -> str:
+            if module_name == package_name:
+                return ""
+            prefix = f"{package_name}."
+            if module_name.startswith(prefix):
+                return module_name[len(prefix) :]
+            return ""
+
+        def module_exists(short_module: str) -> bool:
+            if not short_module:
+                return False
+            try:
+                mod_path = package_root.joinpath(*short_module.split("."))
+                return (mod_path.with_suffix(".py")).is_file() or (
+                    mod_path / "__init__.py"
+                ).is_file()
+            except Exception:
+                return False
+
+        def resolve_relative(module_part: str, imported: list[str]) -> list[str]:
+            dots = 0
+            for ch in module_part:
+                if ch == ".":
+                    dots += 1
+                else:
+                    break
+            if dots == 0:
+                return []
+
+            remainder = module_part[dots:]
+            levels_up = max(0, dots - 1)
+            if levels_up > len(current_pkg_parts):
+                anchor: list[str] = []
+            else:
+                anchor = current_pkg_parts[: len(current_pkg_parts) - levels_up]
+
+            remainder_parts = [p for p in remainder.split(".") if p]
+            base_parts = anchor + remainder_parts
+
+            out: list[str] = []
+            # For "from . import x", avoid adding only the package path itself.
+            if remainder_parts:
+                base = ".".join(base_parts)
+                if base:
+                    out.append(base)
+
+            for name in imported:
+                if not is_module_like(name):
+                    continue
+                candidate = ".".join(base_parts + [name]) if base_parts else name
+                if candidate:
+                    out.append(candidate)
+            return out
+
+        modules: set[str] = set()
+        for raw in sorted(str(i) for i in imports):
+            try:
+                text = " ".join(str(raw).strip().split())
+                if not text:
+                    continue
+
+                if text.startswith("import "):
+                    chunk = text[len("import ") :]
+                    for part in chunk.split(","):
+                        mod = normalize_name(part)
+                        short = strip_pkg_prefix(mod)
+                        if short and module_exists(short):
+                            modules.add(short)
+                    continue
+
+                if not text.startswith("from ") or " import " not in text:
+                    continue
+
+                left, right = text[len("from ") :].split(" import ", 1)
+                module_part = left.strip()
+                imported_names = [
+                    normalize_name(n.strip("() "))
+                    for n in right.split(",")
+                    if normalize_name(n.strip("() "))
+                ]
+
+                if module_part.startswith("."):
+                    for resolved in resolve_relative(module_part, imported_names):
+                        if resolved:
+                            modules.add(resolved)
+                    continue
+
+                short_module = strip_pkg_prefix(module_part)
+                if short_module:
+                    if short_module and module_exists(short_module):
+                        modules.add(short_module)
+                    for name in imported_names:
+                        if is_module_like(name):
+                            candidate = f"{short_module}.{name}" if short_module else name
+                            if candidate and module_exists(candidate):
+                                modules.add(candidate)
+                elif module_part == package_name:
+                    for name in imported_names:
+                        if is_module_like(name) and module_exists(name):
+                            modules.add(name)
+            except Exception:
+                continue
+
+        return sorted(m for m in modules if m and module_exists(m))
+    except Exception:
+        return []
+
+
+def _structured_summary_content(pr: ParseResult, path: Path, root: Path) -> str:
+    """Tier 1 (non-entry): deterministic AST-driven structured summary."""
+    try:
+        rel = path.relative_to(root).as_posix()
+    except Exception:
+        rel = path.as_posix()
+
+    try:
+        purpose = ""
+        for d in getattr(pr, "docstrings", ()):
+            if isinstance(d, str) and d.strip():
+                purpose = d.strip().split("\n", 1)[0].strip()
+                break
+        if not purpose:
+            fallback = path.stem.replace("_", " ").strip() or "module"
+            purpose = f"Implements {fallback}."
+    except Exception:
+        purpose = "Module implementation."
+
+    try:
+        imports = _extract_internal_imports(getattr(pr, "imports", ()), root, path)
+    except Exception:
+        imports = []
+
+    try:
+        symbols = list(getattr(pr, "symbols", ()))
+    except Exception:
+        symbols = []
+
+    def _one_line_doc(doc: str) -> str:
+        return doc.strip().split("\n", 1)[0].strip() if isinstance(doc, str) else ""
+
+    def _extract_bases(signature: str) -> str:
+        try:
+            sig = str(signature)
+            start = sig.find("(")
+            end = sig.rfind(")")
+            if start == -1 or end == -1 or end <= start + 1:
+                return ""
+            return sig[start + 1 : end].strip()
+        except Exception:
+            return ""
+
+    def _truncate_signature(signature: str, max_len: int = 120) -> str:
+        try:
+            sig = str(signature).strip().replace("\n", " ")
+            if len(sig) <= max_len:
+                return sig
+            lpar = sig.find("(")
+            rpar = sig.find(")", lpar + 1) if lpar != -1 else -1
+            if lpar == -1 or rpar == -1:
+                return sig[: max_len - 3] + "..."
+
+            head = sig[: lpar + 1]
+            tail = sig[rpar:]
+            params = [p.strip() for p in sig[lpar + 1 : rpar].split(",") if p.strip()]
+            built = head
+            for i, param in enumerate(params):
+                chunk = (", " if i else "") + param
+                if len(built) + len(chunk) + len(tail) + 4 > max_len:
+                    built += "..." if i == 0 else ", ..."
+                    break
+                built += chunk
+            return built + tail
+        except Exception:
+            text = str(signature)
+            return text if len(text) <= max_len else text[: max_len - 3] + "..."
+
+    class_items: list[tuple[str, str, str, list[str]]] = []
+    function_items: list[tuple[str, str]] = []
+    allowed_dunder = {"__init__", "__call__", "__str__", "__repr__"}
+
+    for sym in sorted(
+        symbols,
+        key=lambda s: (
+            str(getattr(s, "kind", "")),
+            str(getattr(s, "name", "")),
+            str(getattr(s, "signature", "")),
+        ),
+    ):
+        try:
+            kind = str(getattr(sym, "kind", "")).strip()
+            name = str(getattr(sym, "name", "")).strip()
+            signature = str(getattr(sym, "signature", "")).strip()
+            doc = _one_line_doc(getattr(sym, "docstring", ""))
+
+            if kind == "class":
+                method_names: list[str] = []
+                for child in sorted(
+                    getattr(sym, "children", ()), key=lambda c: str(getattr(c, "name", ""))
+                ):
+                    mname = str(getattr(child, "name", "")).strip()
+                    if not mname:
+                        continue
+                    if not mname.startswith("_") or mname in allowed_dunder:
+                        method_names.append(mname)
+                class_items.append(
+                    (
+                        name or "<anonymous>",
+                        _extract_bases(signature),
+                        doc,
+                        sorted(set(method_names)),
+                    )
+                )
+            else:
+                function_items.append((_truncate_signature(signature or name), doc))
+        except Exception:
+            continue
+
+    notes: list[str] = []
+    try:
+        if bool(getattr(pr, "partial_parse", False)):
+            notes.append("partial parse")
+    except Exception:
+        pass
+
+    try:
+        async_count = 0
+        for sym in symbols:
+            sig = str(getattr(sym, "signature", "")).lstrip()
+            if sig.startswith("async "):
+                async_count += 1
+            for child in getattr(sym, "children", ()):
+                child_sig = str(getattr(child, "signature", "")).lstrip()
+                if child_sig.startswith("async "):
+                    async_count += 1
+        if async_count > 2:
+            notes.append(f"async-heavy ({async_count} async functions)")
+    except Exception:
+        pass
+
+    try:
+        raw_source = str(getattr(pr, "raw_source", ""))
+        decorator_lines = sum(
+            1 for line in raw_source.splitlines() if line.lstrip().startswith("@")
+        )
+        if decorator_lines > 5:
+            notes.append(f"decorator-heavy ({decorator_lines} decorators)")
+    except Exception:
+        pass
+
+    try:
+        line_count = int(getattr(pr, "line_count", 0))
+        if line_count > 300:
+            notes.append(f"large file ({line_count} lines)")
+    except Exception:
+        pass
+
+    def _build_summary(
+        max_imports: int,
+        max_classes: int,
+        max_methods: int,
+        max_functions: int,
+        include_function_docs: bool,
+        include_notes: bool,
+    ) -> str:
+        out: list[str] = [f"### `{rel}`", "", f"**Purpose:** {purpose}"]
+
+        if imports and max_imports > 0:
+            shown_imports = imports[:max_imports]
+            dep_text = ", ".join(f"`{m}`" for m in shown_imports)
+            more_imports = len(imports) - len(shown_imports)
+            if more_imports > 0:
+                dep_text += f", +{more_imports} more"
+            out.append(f"**Depends on:** {dep_text}")
+
+        if class_items and max_classes > 0:
+            out.append("")
+            out.append("**Types:**")
+            for name, bases, doc, methods in class_items[:max_classes]:
+                shown_methods = methods[:max_methods]
+                more_methods = len(methods) - len(shown_methods)
+                bits: list[str] = [f"`{name}`"]
+                if bases:
+                    bits.append(f"(bases: `{bases}`)")
+                if doc:
+                    bits.append(f"- {doc}")
+                if shown_methods:
+                    methods_text = ", ".join(f"`{m}`" for m in shown_methods)
+                    if more_methods > 0:
+                        methods_text += f" (+{more_methods} more)"
+                    bits.append(f"methods: {methods_text}")
+                out.append("- " + " ".join(bits))
+
+        if function_items and max_functions > 0:
+            out.append("")
+            out.append("**Functions:**")
+            for signature, doc in function_items[:max_functions]:
+                out.append(f"- `{signature}`")
+                if include_function_docs and doc:
+                    out.append(f"  - {doc}")
+
+        if include_notes and notes:
+            out.append("")
+            out.append(f"**Notes:** {'; '.join(notes)}")
+
+        out.append("")
+        return "\n".join(out)
+
+    compact_profiles = [
+        (8, 6, 6, 12, True, True),
+        (6, 4, 4, 8, True, True),
+        (6, 3, 4, 8, False, True),
+        (5, 2, 3, 6, False, False),
+        (4, 1, 2, 4, False, False),
+    ]
+
+    candidate = _build_summary(*compact_profiles[-1])
+    for profile in compact_profiles:
+        built = _build_summary(*profile)
+        candidate = built
+        if count_tokens(built) <= 200:
+            return built
+
+    minimal: list[str] = [f"### `{rel}`", "", f"**Purpose:** {purpose}"]
+    if function_items:
+        minimal.append("")
+        minimal.append("**Functions:**")
+        minimal.append(f"- `{function_items[0][0]}`")
+        if function_items[0][1]:
+            minimal.append(f"  - {function_items[0][1]}")
+    minimal.append("")
+    minimal_text = "\n".join(minimal)
+    if count_tokens(minimal_text) <= 200:
+        return minimal_text
+    return candidate
+
+
 def _tier2_content(pr: ParseResult, path: Path, root: Path) -> str:
     """Tier 2: function/class signatures + docstrings."""
     rel = path.relative_to(root).as_posix()
@@ -304,7 +691,6 @@ def _one_line_summary(pr: ParseResult) -> str:
         return doc
 
     if pr.symbols:
-        sym_names = [s.name for s in pr.symbols[:5]]
         kind_counts: dict[str, int] = {}
         for s in pr.symbols:
             kind_counts[s.kind] = kind_counts.get(s.kind, 0) + 1

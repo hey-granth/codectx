@@ -147,6 +147,8 @@ def test_token_budget_respected(sample_project: Path) -> None:
         dep_graph=dep_graph,
         root=sample_project,
     )
+    # Verify content was generated with proper sections
+    assert content is not None
 
     # The compressed content consumed by files should be within budget
     total_file_tokens = sum(cf.token_count for cf in compressed)

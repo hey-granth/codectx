@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -26,58 +27,58 @@ console = Console(stderr=True)
 
 @app.command()
 def analyze(
-    root: Path = typer.Argument(
+    root: Path = typer.Argument(  # noqa: B008
         ".",
         help="Repository root directory to analyze.",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    tokens: int = typer.Option(
+    tokens: int = typer.Option(  # noqa: B008
         None,
         "--tokens",
         "-t",
         help="Token budget (default: 120000).",
     ),
-    output: Path = typer.Option(
+    output: Path = typer.Option(  # noqa: B008
         None,
         "--output",
         "-o",
         help="Output file path (default: CONTEXT.md).",
     ),
-    since: str | None = typer.Option(
+    since: str | None = typer.Option(  # noqa: B008
         None,
         "--since",
         help="Include recent changes since this date (e.g. '7 days ago').",
     ),
-    verbose: bool = typer.Option(
+    verbose: bool = typer.Option(  # noqa: B008
         False,
         "--verbose",
         "-v",
         help="Enable verbose logging.",
     ),
-    no_git: bool = typer.Option(
+    no_git: bool = typer.Option(  # noqa: B008
         False,
         "--no-git",
         help="Skip git metadata collection.",
     ),
-    query: str | None = typer.Option(
+    query: str | None = typer.Option(  # noqa: B008
         None,
         "--query",
         "-q",
         help="Semantic query to rank files by relevance (requires codectx[semantic]).",
     ),
-    task: str = typer.Option(
+    task: str = typer.Option(  # noqa: B008
         "default",
         "--task",
         help="Task profile for context generation (debug, feature, architecture, default).",
     ),
-    layers: bool = typer.Option(
+    layers: bool = typer.Option(  # noqa: B008
         False,
         "--layers",
         help="Generate layered context output.",
     ),
-    extra_roots: list[Path] | None = typer.Option(
+    extra_roots: list[Path] | None = typer.Option(  # noqa: B008
         None,
         "--extra-root",
         help="Additional root directories for multi-root analysis.",
@@ -128,16 +129,16 @@ def analyze(
 
 @app.command()
 def benchmark(
-    root: Path = typer.Argument(
+    root: Path = typer.Argument(  # noqa: B008
         ".",
         help="Repository root directory.",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-    no_git: bool = typer.Option(False, "--no-git"),
+    tokens: int = typer.Option(None, "--tokens", "-t"),  # noqa: B008
+    verbose: bool = typer.Option(False, "--verbose", "-v"),  # noqa: B008
+    no_git: bool = typer.Option(False, "--no-git"),  # noqa: B008
 ) -> None:
     """Run analysis with detailed timing and stats."""
     _setup_logging(verbose)
@@ -219,17 +220,17 @@ def benchmark(
 
 @app.command()
 def watch(
-    root: Path = typer.Argument(
+    root: Path = typer.Argument(  # noqa: B008
         ".",
         help="Repository root directory.",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),
-    output: Path = typer.Option(None, "--output", "-o"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-    no_git: bool = typer.Option(False, "--no-git"),
+    tokens: int = typer.Option(None, "--tokens", "-t"),  # noqa: B008
+    output: Path = typer.Option(None, "--output", "-o"),  # noqa: B008
+    verbose: bool = typer.Option(False, "--verbose", "-v"),  # noqa: B008
+    no_git: bool = typer.Option(False, "--no-git"),  # noqa: B008
 ) -> None:
     """Watch for file changes and regenerate CONTEXT.md."""
     _setup_logging(verbose)
@@ -269,11 +270,11 @@ def watch(
 
 @app.command()
 def search(
-    query: str = typer.Argument(
+    query: str = typer.Argument(  # noqa: B008
         ...,
         help="Semantic search query.",
     ),
-    root: Path = typer.Option(
+    root: Path = typer.Option(  # noqa: B008
         ".",
         "--root",
         "-r",
@@ -282,13 +283,13 @@ def search(
         file_okay=False,
         resolve_path=True,
     ),
-    limit: int = typer.Option(
+    limit: int = typer.Option(  # noqa: B008
         10,
         "--limit",
         "-l",
         help="Number of results to return.",
     ),
-    verbose: bool = typer.Option(
+    verbose: bool = typer.Option(  # noqa: B008
         False,
         "--verbose",
         "-v",
@@ -375,7 +376,7 @@ def search(
 
     except Exception as exc:
         console.print(f"[red]Error during search:[/] {exc}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -388,14 +389,14 @@ app.add_typer(cache_app, name="cache")
 
 @cache_app.command("export")
 def cache_export(
-    root: Path = typer.Argument(
+    root: Path = typer.Argument(  # noqa: B008
         ".",
         help="Repository root directory.",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    output: Path = typer.Option(
+    output: Path = typer.Option(  # noqa: B008
         ".codectx_cache.tar.gz",
         "--output",
         "-o",
@@ -411,19 +412,19 @@ def cache_export(
         console.print(f"[bold green]✓[/] Cache exported to [bold]{output}[/]")
     except FileNotFoundError as exc:
         console.print(f"[red]Error:[/] {exc}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
 
 @cache_app.command("import")
 def cache_import(
-    root: Path = typer.Argument(
+    root: Path = typer.Argument(  # noqa: B008
         ".",
         help="Repository root directory.",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    archive: Path = typer.Option(
+    archive: Path = typer.Option(  # noqa: B008
         ".codectx_cache.tar.gz",
         "--input",
         "-i",
@@ -438,7 +439,7 @@ def cache_import(
         console.print(f"[bold green]✓[/] Cache imported from [bold]{archive}[/]")
     except FileNotFoundError as exc:
         console.print(f"[red]Error:[/] {exc}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
 
 @app.callback(invoke_without_command=True)
@@ -459,8 +460,6 @@ def main(
 # ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
-
-from dataclasses import dataclass
 
 
 @dataclass
@@ -558,7 +557,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
         # Step 4: Collect git metadata + score
         progress.update(task, description="Scoring files...")
         git_meta = collect_git_metadata(files, config.root, config.no_git)
-        recent_changes = collect_recent_changes(config.root, config.since, config.no_git)
+        _ = collect_recent_changes(config.root, config.since, config.no_git)
 
         # Optional: semantic scoring via --query
         sem_scores: dict[Path, float] | None = None

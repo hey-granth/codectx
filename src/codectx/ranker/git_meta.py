@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 import re
 import time
-from importlib import import_module
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
