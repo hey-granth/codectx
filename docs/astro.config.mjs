@@ -3,7 +3,7 @@ import starlight from '@astrojs/starlight';
 
 // Local dev defaults to root path; production keeps GitHub Pages subpath.
 const isProduction = process.env.NODE_ENV === 'production';
-const docsBase = process.env.DOCS_BASE ?? (isProduction ? '/codectx' : '/');
+const docsBase = process.env.DOCS_BASE ?? '/';
 
 // https://astro.build/config
 export default defineConfig({
@@ -12,9 +12,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'codectx',
-      social: {
-        github: 'https://github.com/hey-granth/codectx',
-      },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/hey-granth/codectx' },
+      ],
       sidebar: [
         {
           label: 'Introduction',

@@ -10,16 +10,16 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/sitemap": "3.1.6",
-    "@astrojs/starlight": "^0.21.5",
-    "astro": "^4.16.19",
+    "@astrojs/starlight": "^0.38.1",
+    "astro": "^6.0.5",
     "sharp": "^0.33.5"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.7",
+    "@astrojs/check": "^0.9.8",
     "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.1",
+    "eslint": "9.26.0",
     "eslint-plugin-astro": "^1.6.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "overrides": {}
 }
