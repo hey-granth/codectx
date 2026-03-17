@@ -1,0 +1,18 @@
+/* src/styles/custom.css */
+:root {
+  --sl-hue-accent: 270; /* Soft lilac/purple hue for branding */
+  --sl-color-accent-high: hsl(var(--sl-hue-accent), 80%, 80%);
+  --sl-color-accent: hsl(var(--sl-hue-accent), 60%, 50%);
+  --sl-color-accent-low: hsl(var(--sl-hue-accent), 80%, 20%);
+}
+
+[data-theme='light'] {
+  --sl-color-accent-high: hsl(var(--sl-hue-accent), 80%, 30%);
+  --sl-color-accent: hsl(var(--sl-hue-accent), 60%, 45%);
+  --sl-color-accent-low: hsl(var(--sl-hue-accent), 80%, 90%);
+}
+
+.hero .actions .primary {
+  background-color: var(--sl-color-accent);
+  color: #fff;
+}

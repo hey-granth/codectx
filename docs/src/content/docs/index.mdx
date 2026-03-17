@@ -1,0 +1,31 @@
+---
+title: Welcome to codectx
+description: A CLI tool to compile codebases into AI-optimized contexts.
+template: splash
+hero:
+  tagline: Compile your codebase into a structured CONTEXT.md optimized for AI coding agents.
+  actions:
+    - text: Quick Start
+      link: /getting-started/quick-start/
+      variant: primary
+    - text: Learn How it Works
+      link: /introduction/what-is-codectx/
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+
+<CardGrid stagger>
+	<Card title="Tailored for Agents" icon="pencil">
+		codectx structures codebases to maximize an LLM's understanding while minimizing token usage, creating perfect conversational anchors for Claude, GPT-4, and Gemini.
+	</Card>
+	<Card title="Deterministic & Reproducible" icon="add-document">
+		Always generates the same CONTEXT.md for the same codebase, ensuring stability in your automated workflows and prompt tracking.
+	</Card>
+	<Card title="Dependency Aware" icon="setting">
+		Automatically surfaces the architectural dependency graph, enabling coding agents to easily see how different parts of your system connect.
+	</Card>
+	<Card title="Smart Token Compression" icon="open-book">
+		Features a tiered ranking system to selectively compress supporting files and strip unneeded tokens when hitting context window limits.
+	</Card>
+</CardGrid>

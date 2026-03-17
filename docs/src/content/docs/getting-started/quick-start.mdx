@@ -1,0 +1,39 @@
+---
+title: Quick Start
+description: A straightforward guide to generating your first CONTEXT.md file.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+The fastest way to understand what `codectx` does is to run it on your own codebase.
+
+<Steps>
+1. **Navigate to your repository**
+   Open your terminal and navigate to any Python, JavaScript, TypeScript, or Rust project.
+   ```bash
+   cd ~/my-awesome-repo
+   ```
+
+2. **Run codectx**
+   Run the `analyze` command specifying the current directory (`.`) as the target:
+   ```bash
+   codectx analyze .
+   ```
+
+3. **Check the Output**
+   `codectx` will generate a structured `CONTEXT.md` file in the root of your project. Open it in a text editor.
+
+   You'll see a tiered layout detailing your architectural entry points, dependency connections, and key implementations.
+</Steps>
+
+## Passing Context to an LLM
+
+Now that you have your `CONTEXT.md`, here is how you use it:
+
+1. Open your AI coding assistant (Claude, cursor, ChatGPT, etc.).
+2. Drag and drop the `CONTEXT.md` file into the chat.
+3. Prompt the agent: *"Read the attached context file to understand my project's architecture, then implement [Feature X] in the [Module Y]."*
+
+By providing the structured CONTEXT beforehand, the LLM starts with a deterministic, highly organized understanding of exactly how your project goes together.
+
+Next, learn more commands in [Basic Usage](./basic-usage/).
