@@ -72,6 +72,13 @@ def score_files(
         w_rec = 0.05
         w_prox = 0.15
         w_dir = 0.10
+    elif task == "refactor":
+        # Refactoring targets stable, central, and complex files.
+        w_freq = 0.10
+        w_fan = 0.45
+        w_rec = 0.25
+        w_prox = 0.05
+        w_sym = 0.15
 
     # normalize weights
     total_w = w_freq + w_fan + w_rec + w_prox + w_sym + w_dir
@@ -144,6 +151,12 @@ def score_files(
     norm_sym = _min_max_normalize(raw_sym)
     norm_dir = _min_max_normalize(raw_dir)
 
+    # For refactoring, prefer older (less recently modified) files.
+    if task == "refactor":
+        norm_rec_signal = {f: 1.0 - norm_rec.get(f, 0.0) for f in files}
+    else:
+        norm_rec_signal = norm_rec
+
     # Weighted composite
     cyclic = dep_graph.cyclic_files
     scores: dict[Path, float] = {}
@@ -151,7 +164,7 @@ def score_files(
         score = (
             w_freq * norm_freq.get(f, 0.0)
             + w_fan * norm_fan.get(f, 0.0)
-            + w_rec * norm_rec.get(f, 0.0)
+            + w_rec * norm_rec_signal.get(f, 0.0)
             + w_prox * norm_prox.get(f, 0.0)
             + w_sym * norm_sym.get(f, 0.0)
             + w_dir * norm_dir.get(f, 0.0)

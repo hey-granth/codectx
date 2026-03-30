@@ -71,7 +71,7 @@ def analyze(
     task: str = typer.Option(  # noqa: B008
         "default",
         "--task",
-        help="Task profile for context generation (debug, feature, architecture, default).",
+        help="Task profile for context generation (debug, feature, architecture, refactor, default).",
     ),
     layers: bool = typer.Option(  # noqa: B008
         False,
@@ -570,6 +570,11 @@ def _run_pipeline(config: object) -> PipelineMetrics:
                     cache_dir = config.root / CACHE_DIR_NAME
                     cache_dir.mkdir(exist_ok=True)
                     sem_scores = semantic_score(config.query, files, parse_results, cache_dir)
+                else:
+                    logging.getLogger(__name__).warning(
+                        "Semantic scoring requested via --query but optional dependencies are missing. "
+                        "Install with: pip install codectx[semantic]"
+                    )
             except Exception as exc:
                 import logging
 
@@ -613,6 +618,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
             architecture_text=arch_text,
             roots=config.roots if len(config.roots) > 1 else None,
             parse_results=parse_results,
+            task=config.task,
         )
 
         if config.layers:

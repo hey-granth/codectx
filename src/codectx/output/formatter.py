@@ -41,6 +41,7 @@ def format_context(
     architecture_text: str = "",
     roots: list[Path] | None = None,
     parse_results: dict[Path, ParseResult] | None = None,
+    task: str = "default",
 ) -> dict[str, str]:
     """Assemble the full CONTEXT.md content.
 
@@ -146,18 +147,24 @@ def format_context(
 
     # --- IMPORTANT_CALL_PATHS ---
     call_paths_section = _section_header(IMPORTANT_CALL_PATHS.title)
-    call_paths = dep_graph.detect_call_paths(max_depth=5)
+    enhanced_call_paths = task in {"architecture", "refactor"}
+    call_paths = dep_graph.detect_call_paths(
+        max_depth=8 if enhanced_call_paths else 5,
+        max_paths=3 if enhanced_call_paths else 1,
+    )
 
     if call_paths and parse_results:
         import_lines = []
         for path in call_paths:
             for i, node_path in enumerate(path):
-                node_pr = parse_results.get(node_path)
                 sym_name = node_path.stem
+                node_pr = parse_results.get(node_path)
                 if node_pr and node_pr.symbols:
-                    # just take the first symbol as the main representative
-                    sym_name = f"{node_path.stem}.{node_pr.symbols[0].name}()"
-                elif node_pr and not node_pr.symbols:
+                    # Use first symbol as a lightweight call-level annotation.
+                    first_symbol = node_pr.symbols[0].name.strip()
+                    if first_symbol:
+                        sym_name = f"{node_path.stem}.{first_symbol}()"
+                elif node_pr:
                     sym_name = f"{node_path.stem}()"
 
                 if i == 0:

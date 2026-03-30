@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 
 def test_semantic_import_works() -> None:
@@ -62,3 +63,34 @@ def test_pipeline_with_query_no_deps(tmp_path: Path) -> None:
     # Should NOT raise even without semantic deps
     result_metrics = _run_pipeline(config)
     assert result_metrics.output_path.exists()
+
+
+def test_pipeline_query_flows_to_score_files(tmp_path: Path) -> None:
+    """With semantic deps available, semantic scores should be passed to score_files."""
+    from codectx.cli import _run_pipeline
+    from codectx.config.loader import load_config
+
+    main_file = tmp_path / "main.py"
+    main_file.write_text("print('hello')\n")
+
+    config = load_config(tmp_path, no_git=True, query="token budget enforcement")
+    sem_scores = {main_file: 0.77}
+
+    with (
+        patch("codectx.ranker.semantic.is_available", return_value=True),
+        patch("codectx.ranker.semantic.semantic_score", return_value=sem_scores) as mock_semantic,
+        patch("codectx.ranker.scorer.score_files") as mock_score,
+    ):
+        mock_score.side_effect = (
+            lambda files, dep_graph, git_meta, semantic_scores=None, task="default", parse_results=None: {
+                f: 1.0 for f in files
+            }
+        )
+
+        result = _run_pipeline(config)
+
+    assert result.output_path.exists()
+    assert mock_semantic.called
+    assert mock_score.called
+    assert mock_score.call_args.kwargs.get("semantic_scores") == sem_scores
+
