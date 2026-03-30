@@ -13,13 +13,15 @@ class LanguageEntry:
     name: str
     ts_module_name: str  # e.g. "tree_sitter_python"
     extensions: tuple[str, ...]
+    language_fn: str = "language"
 
 
 # Registry of all supported languages
 _LANGUAGES: tuple[LanguageEntry, ...] = (
     LanguageEntry("python", "tree_sitter_python", (".py", ".pyi")),
     LanguageEntry("javascript", "tree_sitter_javascript", (".js", ".jsx", ".mjs", ".cjs")),
-    LanguageEntry("typescript", "tree_sitter_typescript", (".ts", ".tsx")),
+    LanguageEntry("typescript", "tree_sitter_typescript", (".ts",), "language_typescript"),
+    LanguageEntry("typescript", "tree_sitter_typescript", (".tsx",), "language_tsx"),
     LanguageEntry("go", "tree_sitter_go", (".go",)),
     LanguageEntry("rust", "tree_sitter_rust", (".rs",)),
     LanguageEntry("java", "tree_sitter_java", (".java",)),
@@ -60,7 +62,8 @@ def get_ts_language_object(entry: LanguageEntry) -> Any:
     module = importlib.import_module(entry.ts_module_name)
     # Modern tree-sitter packages return a PyCapsule from language(),
     # which must be wrapped in tree_sitter.Language()
-    return tree_sitter.Language(module.language())
+    language_factory = getattr(module, entry.language_fn)
+    return tree_sitter.Language(language_factory())
 
 
 def supported_extensions() -> frozenset[str]:
