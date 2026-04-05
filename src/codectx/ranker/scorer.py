@@ -72,6 +72,13 @@ def score_files(
         w_rec = 0.05
         w_prox = 0.15
         w_dir = 0.10
+    elif task == "refactor":
+        # Refactors prioritize hotspots and symbol-dense modules.
+        w_freq = 0.15
+        w_fan = 0.45
+        w_rec = 0.05
+        w_prox = 0.05
+        w_sym = 0.30
 
     # normalize weights
     total_w = w_freq + w_fan + w_rec + w_prox + w_sym + w_dir
