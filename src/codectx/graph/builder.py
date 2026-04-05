@@ -139,7 +139,7 @@ class DepGraph:
             result.update(cycle)
         return result
 
-    def detect_call_paths(self, max_depth: int = 5, max_paths: int = 1) -> list[list[Path]]:
+    def detect_call_paths(self, max_depth: int = 5) -> list[list[Path]]:
         """Detect important call paths starting from entrypoints.
 
         Algorithm:
@@ -152,89 +152,38 @@ class DepGraph:
         entries = self.entry_points()
 
         for entry in entries:
-            idx = self.path_to_idx.get(entry)
+            current = entry
+            path = [current]
+
+            idx = self.path_to_idx.get(current)
             if idx is None:
                 continue
 
-            # Default behavior: preserve the original single greedy path.
-            if max_paths <= 1:
-                current = entry
-                path = [current]
-                visited = {idx}
-
-                for _ in range(max_depth - 1):
-                    curr_idx = self.path_to_idx[current]
-                    successors = list(self.graph.successor_indices(curr_idx))
-                    if not successors:
-                        break
-
-                    successors.sort(key=lambda s: self.graph.in_degree(s), reverse=True)
-
-                    next_node = None
-                    for s in successors:
-                        if s not in visited:
-                            next_node = s
-                            break
-
-                    if next_node is None:
-                        break
-
-                    visited.add(next_node)
-                    current = self.idx_to_path[next_node]
-                    path.append(current)
-
-                paths.append(path)
-                continue
-
-            # Keep up to max_paths best-scoring path candidates per entrypoint.
-            path_candidates: list[list[int]] = [[idx]]
+            visited = {idx}
 
             for _ in range(max_depth - 1):
-                expanded: list[list[int]] = []
-                did_expand = False
-
-                for candidate in path_candidates:
-                    curr_idx = candidate[-1]
-                    successors = list(self.graph.successor_indices(curr_idx))
-                    if not successors:
-                        expanded.append(candidate)
-                        continue
-
-                    # Sort by fan-in (in-degree) descending.
-                    successors.sort(key=lambda s: self.graph.in_degree(s), reverse=True)
-
-                    next_nodes = [s for s in successors if s not in candidate]
-                    if not next_nodes:
-                        expanded.append(candidate)
-                        continue
-
-                    did_expand = True
-                    for next_idx in next_nodes[:max_paths]:
-                        expanded.append(candidate + [next_idx])
-
-                # Deduplicate exact paths and keep top candidates by fan-in priority.
-                seen: set[tuple[int, ...]] = set()
-                unique: list[list[int]] = []
-                for candidate in expanded:
-                    key = tuple(candidate)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    unique.append(candidate)
-
-                unique.sort(
-                    key=lambda c: (
-                        -sum(self.graph.in_degree(node_idx) for node_idx in c[1:]),
-                        -len(c),
-                    )
-                )
-                path_candidates = unique[:max_paths]
-
-                if not did_expand:
+                curr_idx = self.path_to_idx[current]
+                successors = list(self.graph.successor_indices(curr_idx))
+                if not successors:
                     break
 
-            for candidate in path_candidates[:max_paths]:
-                paths.append([self.idx_to_path[node_idx] for node_idx in candidate])
+                # Sort by fan-in (in-degree) descending
+                successors.sort(key=lambda s: self.graph.in_degree(s), reverse=True)
+
+                next_node = None
+                for s in successors:
+                    if s not in visited:
+                        next_node = s
+                        break
+
+                if next_node is None:
+                    break
+
+                visited.add(next_node)
+                current = self.idx_to_path[next_node]
+                path.append(current)
+
+            paths.append(path)
 
         return paths
 

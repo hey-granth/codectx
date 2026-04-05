@@ -114,17 +114,9 @@ def semantic_score(
     ]
 
     table_name = "files"
-    try:
-        # Preferred path for newer lancedb versions.
-        table = db.create_table(table_name, data=data, mode="overwrite")
-    except TypeError:
-        # Backward-compatible fallback for older versions without mode=.
-        if table_name in db.list_tables():
-            try:
-                db.drop_table(table_name)
-            except Exception:
-                pass
-        table = db.create_table(table_name, data=data)
+    if table_name in db.list_tables():
+        db.drop_table(table_name)
+    table = db.create_table(table_name, data=data)
 
     # Embed query and search
     query_embedding = model.encode([query], show_progress_bar=False)[0]

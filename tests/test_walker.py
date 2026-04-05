@@ -77,3 +77,37 @@ def test_walk_returns_absolute_paths(temp_repo: Path) -> None:
     """All returned paths should be absolute."""
     files = walk(temp_repo)
     assert all(f.is_absolute() for f in files)
+
+
+def test_walk_skips_deep_files_inside_dotvenv(tmp_path: Path) -> None:
+    """Walker should not return any files from inside .venv."""
+    cert_path = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "certifi" / "cacert.pem"
+    cert_path.parent.mkdir(parents=True)
+    cert_path.write_text("fake cert\n")
+    (tmp_path / "main.py").write_text("def main():\n    pass\n")
+
+    files = walk(tmp_path)
+
+    assert cert_path not in files
+    assert all(".venv" not in p.parts for p in files)
+
+
+def test_walk_does_not_follow_symlinked_external_directory(tmp_path: Path) -> None:
+    """Walker should not descend into symlinked directories outside the root."""
+    external_dir = tmp_path.parent / f"{tmp_path.name}_external"
+    external_dir.mkdir()
+    (external_dir / "external.py").write_text("print('outside')\n")
+
+    link_dir = tmp_path / "vendor_link"
+    try:
+        link_dir.symlink_to(external_dir, target_is_directory=True)
+    except (NotImplementedError, OSError):
+        pytest.skip("Symlinks are not available in this test environment")
+
+    (tmp_path / "main.py").write_text("print('inside')\n")
+    files = walk(tmp_path)
+    rel_paths = {f.relative_to(tmp_path).as_posix() for f in files}
+
+    assert "main.py" in rel_paths
+    assert all(not p.startswith("vendor_link/") for p in rel_paths)
+

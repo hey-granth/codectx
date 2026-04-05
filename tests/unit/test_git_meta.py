@@ -1,10 +1,22 @@
 """Tests for git metadata collection."""
 
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
+
+
+def _git(cwd: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def test_collect_no_git(tmp_path: Path) -> None:
@@ -74,3 +86,44 @@ def test_collect_recent_changes(tmp_path: Path) -> None:
     assert "Initial commit" in out
 
     del sys.modules["pygit2"]
+
+
+def test_collect_git_metadata_non_repo_falls_back(tmp_path: Path) -> None:
+    file_path = tmp_path / "main.py"
+    file_path.write_text("print('hello')\n")
+
+    result = collect_git_metadata([file_path], tmp_path, no_git=False)
+
+    assert file_path in result
+    assert result[file_path].commit_count == 0
+    assert result[file_path].last_modified_ts > 0
+
+
+def test_collect_git_metadata_unborn_head_falls_back(tmp_path: Path) -> None:
+    _git(tmp_path, "init")
+    file_path = tmp_path / "main.py"
+    file_path.write_text("print('hello')\n")
+
+    result = collect_git_metadata([file_path], tmp_path, no_git=False)
+
+    assert file_path in result
+    assert result[file_path].commit_count == 0
+    assert result[file_path].last_modified_ts > 0
+
+
+def test_collect_git_metadata_walks_non_main_default_branch(tmp_path: Path) -> None:
+    _git(tmp_path, "init")
+    _git(tmp_path, "checkout", "-b", "trunk")
+    _git(tmp_path, "config", "user.name", "Test User")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+
+    file_path = tmp_path / "main.py"
+    file_path.write_text("print('hello')\n")
+    _git(tmp_path, "add", "main.py")
+    _git(tmp_path, "commit", "-m", "Initial commit on trunk")
+
+    result = collect_git_metadata([file_path], tmp_path, no_git=False)
+
+    assert file_path in result
+    assert result[file_path].commit_count >= 1
+
