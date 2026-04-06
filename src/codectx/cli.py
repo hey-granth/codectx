@@ -613,7 +613,6 @@ def _run_pipeline(config: object) -> PipelineMetrics:
             architecture_text=arch_text,
             roots=config.roots if len(config.roots) > 1 else None,
             parse_results=parse_results,
-            task=config.task,
         )
 
         if config.layers:

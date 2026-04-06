@@ -41,7 +41,6 @@ def format_context(
     architecture_text: str = "",
     roots: list[Path] | None = None,
     parse_results: dict[Path, ParseResult] | None = None,
-    task: str = "default",
 ) -> dict[str, str]:
     """Assemble the full CONTEXT.md content.
 
@@ -147,8 +146,7 @@ def format_context(
 
     # --- IMPORTANT_CALL_PATHS ---
     call_paths_section = _section_header(IMPORTANT_CALL_PATHS.title)
-    max_paths = 3 if task in {"architecture", "refactor"} else 1
-    call_paths = dep_graph.detect_call_paths(max_depth=5, max_paths=max_paths)
+    call_paths = dep_graph.detect_call_paths(max_depth=5)
 
     if call_paths and parse_results:
         import_lines = []

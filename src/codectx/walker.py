@@ -58,21 +58,8 @@ def _collect(
     root: Path,
     spec: pathspec.PathSpec,
     out: list[Path],
-    visited_dirs: set[Path] | None = None,
 ) -> None:
     """Recursively collect files, pruning ignored directories."""
-    if visited_dirs is None:
-        visited_dirs = set()
-
-    try:
-        current_real = current.resolve(strict=True)
-    except OSError:
-        current_real = current.resolve()
-
-    if current_real in visited_dirs:
-        return
-    visited_dirs.add(current_real)
-
     try:
         entries = sorted(current.iterdir(), key=lambda e: e.name)
     except PermissionError:
@@ -81,23 +68,8 @@ def _collect(
     for entry in entries:
         if should_ignore(spec, entry, root):
             continue
-
-        if entry.is_symlink() and entry.is_dir():
-            try:
-                target = entry.resolve(strict=True)
-            except OSError:
-                continue
-
-            try:
-                target.relative_to(root)
-            except ValueError:
-                continue
-
-            _collect(entry, root, spec, out, visited_dirs)
-            continue
-
         if entry.is_dir():
-            _collect(entry, root, spec, out, visited_dirs)
+            _collect(entry, root, spec, out)
         elif entry.is_file():
             out.append(entry)
 

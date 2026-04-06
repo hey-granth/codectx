@@ -71,31 +71,11 @@ def _collect_from_git(
 
     try:
         head = repo.head
-        head_target = getattr(head, "target", None)
-        if head_target is None:
-            logger.debug("Git HEAD has no target; falling back to filesystem metadata")
+        if head.target is None:
             return _filesystem_fallback(files)
-
-        head_name = getattr(head, "name", "")
-        references = getattr(repo, "references", None)
-        if isinstance(head_name, str) and head_name and references is not None:
-            try:
-                if head_name not in references:
-                    logger.debug(
-                        "Git HEAD reference %r is missing; falling back to filesystem metadata",
-                        head_name,
-                    )
-                    return _filesystem_fallback(files)
-            except Exception as exc:
-                logger.debug(
-                    "Could not inspect git references (%s); falling back to filesystem metadata",
-                    exc,
-                )
-                return _filesystem_fallback(files)
-
-        walker = repo.walk(head_target, pygit2_mod.GIT_SORT_TIME)
+        walker = repo.walk(head.target, pygit2_mod.GIT_SORT_TIME)
     except Exception as exc:
-        logger.debug("Could not walk git log; falling back to filesystem metadata: %s", exc)
+        logger.warning("Could not walk git log: %s", exc)
         return _filesystem_fallback(files)
 
     # Walk commits and diff to find which files were touched
