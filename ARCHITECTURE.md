@@ -64,21 +64,21 @@ The graph enables ranking algorithms to identify important modules based on stru
 The Ranker computes a composite importance score for each file:
 
 ```
-score = (0.35 × git_frequency)
-      + (0.35 × fan_in)
-      + (0.20 × recency)
+score = (0.40 × git_frequency)
+      + (0.40 × fan_in)
+      + (0.10 × recency)
       + (0.10 × entry_proximity)
 ```
 
-**Git Frequency (0.35):** Commit count touching the file. Frequently-modified files are typically more important.
+**Git Frequency (0.40):** Commit count touching the file. Frequently-modified files are typically more important.
 
-**Fan-in (0.35):** Inverse-normalized in-degree. Files imported by many other modules are critical interfaces.
+**Fan-in (0.40):** Inverse-normalized in-degree. Files imported by many other modules are critical interfaces.
 
-**Recency (0.20):** Days since last modification. Recently active files are prioritized.
+**Recency (0.10):** Days since last modification. Recently active files are prioritized.
 
 **Entry Proximity (0.10):** Graph distance from identified entry points. Files close to main execution paths rank higher.
 
-Scores are normalized to `[0.0, 1.0]` range for uniform compression tier assignment.
+Scores are normalized to `[0.0, 1.0]` range for uniform compression tier assignment. Semantic searches (`--query`) inject a 5th signal at 20% weight and rescale the other four to 80%.
 
 **Output:** `Dict[Path, float]` mapping file paths to scores.
 
@@ -86,11 +86,13 @@ Scores are normalized to `[0.0, 1.0]` range for uniform compression tier assignm
 
 **Purpose:** Fit code content within a token budget.
 
-The Compressor assigns content tiers based on scores:
+The Compressor assigns content tiers based on scored percentiles:
 
-- **Tier 1** (score ≥ 0.7) — Full source code
-- **Tier 2** (0.3 ≤ score < 0.7) — Function signatures and docstrings only
-- **Tier 3** (score < 0.3) — One-line summary
+- **Tier 1** (Top 15%) — AST-driven structured summaries or full source code for true entry points
+- **Tier 2** (Next 30%) — Function signatures and docstrings only
+- **Tier 3** (Remaining) — One-line summaries
+
+A Summarizer step (`--llm` extras) runs specifically evaluating `Tier 3` code mapping out detailed functions implicitly before output mapping.
 
 Files are emitted in order: Tier 1 by score descending, then Tier 2, then Tier 3.
 
@@ -111,13 +113,15 @@ This is a hard constraint. The tool does not emit context that exceeds the token
 
 The Formatter writes sections in fixed order:
 
-1. **ARCHITECTURE** — High-level project structure
-2. **DEPENDENCY_GRAPH** — Mermaid diagram of module relationships
-3. **ENTRY_POINTS** — Main files and public interfaces with full source
-4. **CORE_MODULES** — High-scoring modules with full source
-5. **SUPPORTING_MODULES** — Mid-scoring modules with signatures and docstrings
-6. **PERIPHERY** — Low-scoring files with one-line summaries
-7. **RECENT_CHANGES** — Optional diff section (if `--since` flag provided)
+1. **ARCHITECTURE** — High-level project structure derived from files
+2. **ENTRY_POINTS** — Main files and public interfaces with full source
+3. **SYMBOL_INDEX** — Identifies references and mappings across the codebase
+4. **IMPORTANT_CALL_PATHS** — Tracks deep operational flows sequentially
+5. **CORE_MODULES** — High-scoring modules with structured logic constraints
+6. **SUPPORTING_MODULES** — Mid-scoring modules with signatures and docstrings
+7. **DEPENDENCY_GRAPH** — Mermaid diagram of module relationships
+8. **RANKED_FILES** — Sorted layout tracking cost algorithms
+9. **PERIPHERY** — Low-scoring files with one-line summaries
 
 Each section is preceded by a Markdown heading and terminated with metadata (token count, file count).
 
@@ -156,6 +160,7 @@ File System
     ├─→ [Compressor]
     │   ├ Tier assignment
     │   ├ Token budget enforcement
+    │   ├ [Optional: AI Summarizer hooks]
     │   └ Output: Dict[Path, CompressedContent]
     │
     └─→ [Formatter]
@@ -203,7 +208,7 @@ Budget enforcement is hard: the tool does not emit context exceeding the specifi
 Consumption order:
 
 1. Fixed overhead (section headers, metadata) — typically 500–1000 tokens
-2. Tier 1 files by score descending (full source)
+2. Tier 1 files by score descending (AST Summaries / Full source)
 3. Tier 2 files by score descending (signatures only)
 4. Tier 3 files by score descending (one-line summaries)
 
@@ -218,11 +223,13 @@ The Parser uses tree-sitter for universal AST extraction. Each language requires
 
 Currently supported:
 
-- **Python** — `import X`, `from X import Y`
-- **TypeScript/JavaScript** — `import * from "X"`, `require("X")`
-- **Go** — `import "X"`
-- **Rust** — `use X::{Y, Z}`
-- **Java** — `import X.Y;`
+- **Python**
+- **TypeScript/JavaScript**
+- **Go**
+- **Rust**
+- **Java**
+- **C/C++**
+- **Ruby**
 
 Adding a language requires implementing a resolver in `src/codectx/graph/resolver.py` and adding the grammar dependency to `pyproject.toml`.
 
@@ -231,40 +238,14 @@ Adding a language requires implementing a resolver in `src/codectx/graph/resolve
 Configuration is applied in this precedence order:
 
 1. **CLI flags** (highest priority)
-2. **`.contextcraft.toml`** in repository root
+2. **`.codectx.toml`** in repository root
 3. **Built-in defaults** (lowest priority)
 
-Example `.contextcraft.toml`:
+Example `.codectx.toml`:
 
 ```toml
 [codectx]
 token_budget = 120000
-output = "CONTEXT.md"
-include_patterns = ["src/**", "lib/**"]
-exclude_patterns = ["tests/**", "*.test.py"]
+output_file = "CONTEXT.md"
+extra_ignore = ["**/generated/**", "*.draft.py"]
 ```
-
-## Parallelism Strategy
-
-**CPU-bound tasks (Parser):** `ProcessPoolExecutor` — parsing and AST extraction leverages tree-sitter C extension.
-
-**I/O-bound tasks (Git metadata, file I/O):** `ThreadPoolExecutor` — reading git history and source files is I/O-bound.
-
-**Sync tasks:** Graph construction, ranking, and compression are single-threaded because they are fast and maintain simple state.
-
-This mixed-executor approach balances CPU and I/O contention.
-
-## Performance Characteristics
-
-On a typical 10k-file repository:
-
-- **Walker:** ~500ms (filesystem traversal)
-- **Parser:** ~2-5s (parallel tree-sitter parsing)
-- **Graph Builder:** ~100ms (import resolution)
-- **Ranker:** ~200ms (scoring and normalization)
-- **Compressor:** ~50ms (tier assignment)
-- **Formatter:** ~100ms (markdown generation)
-
-**Total:** ~3-6 seconds for full analysis.
-
-Incremental mode (watch) is typically 5-10x faster because it processes only changed files.

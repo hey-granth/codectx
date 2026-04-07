@@ -26,5 +26,5 @@ Tools like `Aider` or traditional RAG pipelines rely on vectorizing codebases an
 Many IDEs are starting to include automatic context inclusion based on active tabs or @ symbols.
 
 **Where codectx differs:**
-- **Token Budgeting & Fallbacks**: The context collected by IDEs is often black-boxed and silently truncates when limits are exceeded. `codectx` has explicit fallback strategies (like comment stripping and interface collapsing) specifically to maximize utility within a hard token limit.
+- **Token Budgeting & Fallbacks**: The context collected by IDEs is often black-boxed and silently truncates when limits are exceeded. `codectx` has explicit fallback strategies (evaluating critical files first, and reducing lower-tiered files to strict function/class signatures and one-liners) specifically to maximize utility within a hard token limit.
 - **Reusability**: `codectx` outputs a tangible file that you can track in git, attach to PR reviews, or feed into background non-interactive agents. 

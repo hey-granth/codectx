@@ -3,20 +3,24 @@ title: Token Compression Strategy
 description: How codectx ensures your context fits within limits.
 ---
 
-Providing a `--tokens [MAX]` flag enables the `codectx` compression engine. This is heavily optimized to safely pack as much structural context as possible without breaking the LLM's understanding.
+Providing a `--tokens [MAX]` flag enables the `codectx` compression engine, capping execution out perfectly to the budget. The compression engine processes files based strictly on the Tier levels established in the ranking engine.
 
-## Compression Flow
+## Tier Details
 
-When the raw `CONTEXT.md` size exceeds the maximum requested tokens, the following steps execute sequentially until the budget is met:
+### 1. Tier 1: Key Metadata
+Instead of full source reproduction, `codectx` emits an AST-driven **structured summary** representing the overall footprint natively derived from its core definitions. This includes its exact purpose, what valid variables/internal dependencies it leverages, types, function headers, signatures, and behavioral notes out-of-the-norm (`async-heavy`). The *only* source files evaluated functionally end-to-end to `300` lines (max) are strict entry points (e.g. `main.py`).
 
-### 1. Periphery Pruning (Tier 3)
-The engine removes the implementation details of Tier 3 files entirely. 
-*Instead of providing a 500-line test file, it only lists the filename in the Tree structure.*
+### 2. Tier 2: Interface Collapsing
+Tier 2 emits exact function and class signatures alongside docstrings. Everything within the body scope of `def`/`class` implementations is intentionally discarded.
 
-### 2. Comment Stripping
-Inline comments and docstrings in Tier 2 files are stripped using AST parsing (respecting the syntax tree, not just regex). This dramatically drops token counts while keeping raw structural code intact.
+### 3. Tier 3: One Line Summary
+Tier 3 simply includes an exact heuristic statement of its functionality. Ex: "10 classes, 15 lines".
 
-### 3. Interface Collapsing
-If the budget is still exceeded, `codectx` collapses Tier 2 files into strictly their interface definitions (class signatures, function headers, exported types) removing the internal function bodies entirely.
+## The Budget Priority
+Budget gets consumed through evaluating Tier 1 first, descending across its internal scores. It moves through Tier 2 down into Tier 3.
 
-By applying these sequentially, the LLM retains maximum context about *what* the system does and *how* it connects, only losing *implementation details* when absolutely necessary.
+```text
+[Tokens] -> Tier 1 Output -> Tier 2 Output -> Tier 3 Output
+```
+
+If budget truncates along the threshold flow, we abandon any remaining Tier 3 elements, truncate Tier 2 elements natively across the file buffer bounds, all the way to trimming existing parsed summaries.

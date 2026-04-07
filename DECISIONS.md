@@ -248,7 +248,7 @@ We needed a configuration file format that is readable, standard, and integrates
 
 **Decision**
 
-Use TOML format for `.contextcraft.toml` configuration files, following PEP 518 conventions.
+Use TOML format for `.codectx.toml` configuration files, following PEP 518 conventions.
 
 **Consequences**
 

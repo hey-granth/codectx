@@ -20,24 +20,35 @@ We strongly recommend installing `codectx` universally via `uv` or `pipx` to kee
   <TabItem label="uv (Recommended)">
     If you use `uv`, installing `codectx` takes seconds:
 
+    ```bash
     uv tool install codectx
-
+    ```
   </TabItem>
 <br>
   <TabItem label="pipx">
     For global isolated installation using `pipx`:
 
+    ```bash
     pipx install codectx
-
+    ```
   </TabItem>
 <br>
   <TabItem label="pip">
     To install directly into an active virtual environment:
 
+    ```bash
     pip install codectx
-
+    ```
   </TabItem>
 </Tabs>
+
+## Enabling Semantic Search
+
+To use the `--query` functionality for semantic file ranking, you must install the `[semantic]` extra which includes dependencies like `sentence-transformers` and `lancedb`:
+
+```bash
+pip install codectx[semantic]
+```
 
 ## Verify Installation
 

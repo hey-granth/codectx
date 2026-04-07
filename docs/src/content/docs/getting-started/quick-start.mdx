@@ -21,9 +21,13 @@ The fastest way to understand what `codectx` does is to run it on your own codeb
    ```
 
 3. **Check the Output**
-   `codectx` will generate a structured `CONTEXT.md` file in the root of your project. Open it in a text editor.
+   `codectx` will generate a structured `CONTEXT.md` file in the root of your project. Open it in a text editor to see a tiered layout detailing your architectural entry points, dependency connections, and key implementations.
 
-   You'll see a tiered layout detailing your architectural entry points, dependency connections, and key implementations.
+4. **Try a specific task profile**
+   `codectx` can adjust its scoring and output based on what your AI assistant is trying to accomplish. For example, if you are asking an agent to write a new feature, run:
+   ```bash
+   codectx analyze . --task feature
+   ```
 </Steps>
 
 ## Passing Context to an LLM

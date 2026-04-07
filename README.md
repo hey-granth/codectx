@@ -74,11 +74,12 @@ codectx analyze . --output my-context.md
 # watch mode — regenerate on file changes
 codectx watch .
 
-# include recent git changes
-codectx analyze . --since "7 days ago"
+# semantic search ranking
+codectx analyze . --query "authentication flows"
 
 # task-specific ranking profiles
 codectx analyze . --task architecture
+codectx analyze . --task refactor
 codectx analyze . --task debug
 codectx analyze . --task feature
 ```
@@ -125,12 +126,11 @@ Create `.codectx.toml` in your project root:
 ```toml
 [codectx]
 token_budget = 120000
-output = "CONTEXT.md"
-include_patterns = ["src/**", "lib/**"]
-exclude_patterns = ["tests/**", "*.test.py"]
+output_file = "CONTEXT.md"
+extra_ignore = ["**/generated/**", "*.draft.py"]
 ```
 
-CLI flags override config file values. Supported task profiles for `--task`: `default`, `debug`, `feature`, `architecture`.
+CLI flags override config file values. Supported task profiles for `--task`: `default`, `debug`, `feature`, `architecture`, `refactor`.
 
 ## Supported languages
 

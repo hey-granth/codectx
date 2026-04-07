@@ -3,29 +3,38 @@ title: How the Ranking System Works
 description: Learn how codectx categorizes importance across a codebase.
 ---
 
-When building `CONTEXT.md`, preserving context without exceeding the LLM token budget is paramount. `codectx` employs a tiered ranking system to decide which parts of the codebase matter most.
+When building `CONTEXT.md`, preserving context without exceeding the LLM token budget is paramount. `codectx` employs a tiered ranking system based on multiple metrics to decide which parts of the codebase matter most.
 
-## The Tiers
+## Metrics & Weights
 
-### Tier 1: Core Definitions
-These are files critical to understanding the overarching architecture.
-- **Entry points:** `main.py`, `app.ts`, `index.js`.
-- **Architectural instructions:** `ARCHITECTURE.md`, `README.md`.
-- **Primary routers:** High-level APIs and dispatchers.
+`codectx` calculates rank using a hybrid approach, applying a standard composite weight system to four primary metrics (normalized to `[0.0, 1.0]`):
 
-### Tier 2: Logic and Implementations
-These files contain the meat of the application logic but inherit importance from Tier 1.
-- Models, services, controllers.
-- Files that are heavily imported by many other files.
+1. **Git Frequency (40%)**: How often has the file changed?
+2. **Fan-In Centrality (40%)**: How many files import this file?
+3. **Recency (10%)**: How recently was this file changed in git?
+4. **Entry Proximity (10%)**: How close is this file to the entry points within the module dependency graph?
 
-### Tier 3: Periphery
-Files that are necessary for the project but usually distract LLMs when reasoning about architecture.
-- Tests (e.g., `test_*.py`, `*.spec.ts`).
-- Utility scripts, internal tooling, CI configs.
+If an explicit `--query` is provided, a 5th signal for **Semantic Similarity** takes up `20%` of the total weight, proportionately rescaling the initial four metrics to `80%`.
 
-## Heuristics Used
+Moreover, files involved in cyclic dependency loops receive a strict `-0.10` penalty.
 
-`codectx` calculates rank using a hybrid approach:
-1. **Explicit Identification**: Filename patterns (e.g., matching `test_` automatically down-ranks a file to Tier 3).
-2. **Graph Centrality**: PageRank-style algorithms on the import graph. If ten different modules import a `logger.py`, it gets elevated.
-3. **Distance to Entry Point**: Files closer to the entry point (Tier 1) in the import graph are ranked higher than files buried deep in the tree.
+## Task Profiles 
+
+You can influence how heavily the ranking factors weigh by overriding the default behavior using `--task`.
+
+- **`default`**: Explained above.
+- **`debug`**: Shifts priority mainly to recency (`0.50`), and reduces distance logic. Best for finding out why something you just edited broke.
+- **`feature`**: Fan-in jumps to (`0.50`) and symbol density (`0.10`). Used to build full extensions. 
+- **`architecture`**: Ignores pure recency and leverages extremely high graph dependency structure tracking (fan-in = `0.60`, entry proximity = `0.15`, directory depth = `0.10`).
+- **`refactor`**: Emphasizes symbol density (`0.25`) and older recency logic.
+
+## Percentile Tiers
+
+The combined rankings resolve into specific distribution Tiers:
+
+- **Tier 1 (Top 15%)**: Extremely critical code.
+- **Tier 2 (Next 30%)**: Critical business logic code.
+- **Tier 3 (Remaining)**: Periphery execution code.
+
+### Non-Source Filters
+Important: Specific non-source directories (e.g. `tests`, `test`, `docs`, `doc`, `examples`, `benchmarks`, `scripts`) are inherently overridden to evaluate strictly as **Tier 3** logic regardless of how many incoming connections or git modifications they possess.

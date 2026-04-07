@@ -327,15 +327,6 @@ def search(
 - `_run_pipeline()`
 - `_setup_logging()`
 
-**`src/codectx/output/formatter.py`**
-- `_root_label()`
-- `format_context()`
-- `write_context_file()`
-- `write_layer_files()`
-- `_section_header()`
-- `_auto_architecture()`
-- `_render_mermaid_graph()`
-
 **`src/codectx/graph/builder.py`**
 - class `DepGraph`
   - `add_file()`
@@ -348,6 +339,15 @@ def search(
   - `detect_call_paths()`
 - `build_dependency_graph()`
 
+**`src/codectx/output/formatter.py`**
+- `_root_label()`
+- `format_context()`
+- `write_context_file()`
+- `write_layer_files()`
+- `_section_header()`
+- `_auto_architecture()`
+- `_render_mermaid_graph()`
+
 **`src/codectx/ranker/scorer.py`**
 - `score_files()`
 - `_min_max_normalize()`
@@ -357,6 +357,13 @@ def search(
 - class `ParseResult`
 - `make_plaintext_result()`
 
+**`src/codectx/walker.py`**
+- `walk()`
+- `_collect()`
+- `_is_binary()`
+- `walk_multi()`
+- `find_root()`
+
 **`src/codectx/ranker/git_meta.py`**
 - class `GitFileInfo`
 - `collect_git_metadata()`
@@ -365,13 +372,6 @@ def search(
 - `collect_recent_changes()`
 - `_parse_since()`
 - `_load_pygit2()`
-
-**`src/codectx/walker.py`**
-- `walk()`
-- `_collect()`
-- `_is_binary()`
-- `walk_multi()`
-- `find_root()`
 
 **`src/codectx/compressor/tiered.py`**
 - class `CompressedFile`
@@ -384,10 +384,6 @@ def search(
 - `_tier2_content()`
 - `_tier3_content()`
 - `_one_line_summary()`
-
-**`src/codectx/ranker/semantic.py`**
-- `is_available()`
-- `semantic_score()`
 
 **`src/codectx/parser/treesitter.py`**
 - `_parse_scm_patterns()`
@@ -416,6 +412,10 @@ def search(
 - `_find_child()`
 - `_extract_first_docstring()`
 - `_read_source()`
+
+**`src/codectx/ranker/semantic.py`**
+- `is_available()`
+- `semantic_score()`
 
 **`src/codectx/config/loader.py`**
 - class `Config`
@@ -494,17 +494,6 @@ main.main()
 
 **Purpose:** Default configuration values and constants for codectx.
 
-### `src/codectx/output/formatter.py`
-
-**Purpose:** Structured markdown formatter — emits CONTEXT.md.
-**Depends on:** `compressor.tiered`, `config.defaults`, `graph.builder`, `output.sections`, +1 more
-
-**Functions:**
-- `def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str`
-- `def _render_mermaid_graph(     dep_graph: DepGraph,     root: Path,     compressed: list[CompressedFile], ) -> str`
-- `def _root_label(file_path: Path, roots: list[Path] | None) -> str`
-- `def _section_header(title: str) -> str`
-
 ### `src/codectx/graph/builder.py`
 
 **Purpose:** Dependency graph construction using rustworkx.
@@ -516,6 +505,17 @@ main.main()
 **Functions:**
 - `def build_dependency_graph(     parse_results: dict[Path, ParseResult],     root: Path, ) -> DepGraph`
   - Build a dependency graph from parse results.
+
+### `src/codectx/output/formatter.py`
+
+**Purpose:** Structured markdown formatter — emits CONTEXT.md.
+**Depends on:** `compressor.tiered`, `config.defaults`, `graph.builder`, `output.sections`, +1 more
+
+**Functions:**
+- `def _auto_architecture(compressed: list[CompressedFile], root: Path) -> str`
+- `def _render_mermaid_graph(     dep_graph: DepGraph,     root: Path,     compressed: list[CompressedFile], ) -> str`
+- `def _root_label(file_path: Path, roots: list[Path] | None) -> str`
+- `def _section_header(title: str) -> str`
 
 ### `src/codectx/ranker/scorer.py`
 
@@ -540,6 +540,18 @@ main.main()
 - `def make_plaintext_result(path: Path, source: str) -> ParseResult`
   - Create a minimal ParseResult for unsupported language files.
 
+### `src/codectx/walker.py`
+
+**Purpose:** File-system walker — discovers files, applies ignore specs, filters binaries.
+**Depends on:** `config.defaults`, `ignore`
+
+**Functions:**
+- `def _collect(     current: Path,     root: Path,     spec: pathspec.PathSpec,     out: list[Path], ) -> None`
+- `def _is_binary(path: Path) -> bool`
+- `def find_root(file_path: Path, roots: list[Path]) -> Path | None`
+- `def walk(     root: Path,     extra_ignore: tuple[str, ...] = (),     output_file: Path | None = None, ) -> list[Path]`
+- `def walk_multi(roots: list[Path], ...),     output_file: Path | None = None, ) -> dict[Path, list[Path]]`
+
 ### `src/codectx/ranker/git_meta.py`
 
 **Purpose:** Git metadata extraction via pygit2.
@@ -555,18 +567,6 @@ main.main()
 - `def collect_git_metadata(files: list[Path], root: Path, no_git: bool = False, ...) -> dict[Path, GitFileInfo]`
 - `def collect_recent_changes(root: Path, since: str | None, no_git: bool = False) -> str`
 
-### `src/codectx/walker.py`
-
-**Purpose:** File-system walker — discovers files, applies ignore specs, filters binaries.
-**Depends on:** `config.defaults`, `ignore`
-
-**Functions:**
-- `def _collect(     current: Path,     root: Path,     spec: pathspec.PathSpec,     out: list[Path], ) -> None`
-- `def _is_binary(path: Path) -> bool`
-- `def find_root(file_path: Path, roots: list[Path]) -> Path | None`
-- `def walk(     root: Path,     extra_ignore: tuple[str, ...] = (),     output_file: Path | None = None, ) -> list[Path]`
-- `def walk_multi(roots: list[Path], ...),     output_file: Path | None = None, ) -> dict[Path, list[Path]]`
-
 ### `src/codectx/compressor/tiered.py`
 
 **Purpose:** Tiered compression — assigns tiers and enforces token budget.
@@ -581,17 +581,6 @@ main.main()
 - `def _one_line_summary(pr: ParseResult) -> str`
 - `def _structured_summary_content(pr: ParseResult, path: Path, root: Path) -> str`
 
-### `src/codectx/ranker/semantic.py`
-
-**Purpose:** Semantic search ranking using lancedb and sentence-transformers.
-**Depends on:** `parser.base`
-
-**Functions:**
-- `def is_available() -> bool`
-  - Check if semantic search dependencies are available.
-- `def semantic_score(query: str, files: list[Path], parse_results: dict[Path, ParseResult], ...) -> dict[Path, float]`
-  - Return semantic relevance score 0.0–1.0 per file for the given query.
-
 ### `src/codectx/parser/treesitter.py`
 
 **Purpose:** Tree-sitter AST extraction — parallel parsing of source files.
@@ -605,6 +594,17 @@ main.main()
 - `def _extract_first_docstring(body_node: Any, source: str) -> str`
 - `def _extract_imports(node: Any, language: str, source: str) -> list[str]`
 - `def _extract_module_docstrings(node: Any, language: str, source: str) -> list[str]`
+
+### `src/codectx/ranker/semantic.py`
+
+**Purpose:** Semantic search ranking using lancedb and sentence-transformers.
+**Depends on:** `parser.base`
+
+**Functions:**
+- `def is_available() -> bool`
+  - Check if semantic search dependencies are available.
+- `def semantic_score(query: str, files: list[Path], parse_results: dict[Path, ParseResult], ...) -> dict[Path, float]`
+  - Return semantic relevance score 0.0–1.0 per file for the given query.
 
 ### `pyproject.toml`
 
@@ -752,6 +752,10 @@ class TokenBudget
 
 ```
 
+### `PLAN.md`
+
+*145 lines, 0 imports*
+
 ### `.gitignore`
 
 *44 lines, 0 imports*
@@ -878,15 +882,15 @@ def _read_pattern_file(path: Path) -> list[str]
 ```mermaid
 graph LR
     f0["src/codectx/cli.py"]
-    f1["src/codectx/output/formatter.py"]
-    f2["src/codectx/graph/builder.py"]
+    f1["src/codectx/graph/builder.py"]
+    f2["src/codectx/output/formatter.py"]
     f3["src/codectx/ranker/scorer.py"]
     f4["src/codectx/parser/base.py"]
-    f5["src/codectx/ranker/git_meta.py"]
-    f6["src/codectx/walker.py"]
+    f5["src/codectx/walker.py"]
+    f6["src/codectx/ranker/git_meta.py"]
     f7["src/codectx/compressor/tiered.py"]
-    f8["src/codectx/ranker/semantic.py"]
-    f9["src/codectx/parser/treesitter.py"]
+    f8["src/codectx/parser/treesitter.py"]
+    f9["src/codectx/ranker/semantic.py"]
     f10["pyproject.toml"]
     f11["src/codectx/cache.py"]
     f12["src/codectx/graph/resolver.py"]
@@ -903,33 +907,33 @@ graph LR
     f23["src/codectx/graph/__init__.py"]
     f24["src/codectx/output/__init__.py"]
     f0 --> f21
-    f0 --> f1
+    f0 --> f2
     f0 --> f4
     f0 --> f11
-    f0 --> f8
+    f0 --> f9
     f0 --> f7
     f0 --> f14
     f0 --> f3
-    f0 --> f5
-    f0 --> f2
-    f0 --> f9
     f0 --> f6
+    f0 --> f1
+    f0 --> f8
+    f0 --> f5
     f0 --> f20
     f1 --> f4
-    f1 --> f13
-    f1 --> f2
-    f1 --> f7
+    f1 --> f12
     f2 --> f4
-    f2 --> f12
-    f3 --> f5
+    f2 --> f13
+    f2 --> f1
+    f2 --> f7
+    f3 --> f6
     f3 --> f4
-    f3 --> f2
-    f6 --> f19
+    f3 --> f1
+    f5 --> f19
     f7 --> f17
     f7 --> f4
     f7 --> f14
+    f8 --> f16
     f8 --> f4
-    f9 --> f16
     f9 --> f4
     f11 --> f4
     f17 --> f4
@@ -939,54 +943,57 @@ graph LR
 
 | File | Score | Tier | Tokens |
 |------|-------|------|--------|
-| `src/codectx/cli.py` | 0.725 | full source | 2189 |
-| `src/codectx/config/defaults.py` | 0.663 | structured summary | 25 |
-| `src/codectx/output/formatter.py` | 0.622 | structured summary | 150 |
-| `src/codectx/graph/builder.py` | 0.613 | structured summary | 134 |
-| `src/codectx/ranker/scorer.py` | 0.542 | structured summary | 150 |
-| `src/codectx/parser/base.py` | 0.531 | structured summary | 91 |
-| `src/codectx/ranker/git_meta.py` | 0.487 | structured summary | 194 |
-| `src/codectx/walker.py` | 0.462 | structured summary | 186 |
-| `src/codectx/compressor/tiered.py` | 0.438 | structured summary | 164 |
-| `src/codectx/ranker/semantic.py` | 0.396 | structured summary | 115 |
-| `src/codectx/parser/treesitter.py` | 0.390 | structured summary | 161 |
-| `pyproject.toml` | 0.340 | structured summary | 14 |
-| `src/codectx/config/loader.py` | 0.282 | structured summary | 200 |
-| `src/codectx/cache.py` | 0.234 | signatures | 103 |
-| `src/codectx/graph/resolver.py` | 0.218 | signatures | 537 |
-| `src/codectx/output/sections.py` | 0.217 | signatures | 38 |
-| `tests/test_integration.py` | 0.195 | one-liner | 20 |
-| `src/codectx/compressor/budget.py` | 0.175 | signatures | 74 |
-| `tests/unit/test_semantic.py` | 0.171 | one-liner | 17 |
-| `tests/unit/test_cache_export.py` | 0.158 | one-liner | 17 |
-| `tests/test_walker.py` | 0.144 | one-liner | 15 |
-| `tests/unit/test_git_meta.py` | 0.144 | one-liner | 16 |
-| `tests/unit/test_formatter_coverage.py` | 0.142 | one-liner | 15 |
-| `tests/unit/test_formatter_sections.py` | 0.142 | one-liner | 19 |
-| `.gitignore` | 0.135 | signatures | 13 |
-| `src/codectx/parser/languages.py` | 0.126 | signatures | 174 |
-| `tests/test_compressor.py` | 0.115 | one-liner | 18 |
-| `tests/unit/test_summarizer.py` | 0.115 | one-liner | 19 |
-| `tests/unit/test_treesitter.py` | 0.115 | one-liner | 18 |
-| `src/codectx/compressor/summarizer.py` | 0.111 | signatures | 348 |
-| `README.md` | 0.109 | signatures | 13 |
-| `tests/unit/test_resolver.py` | 0.107 | one-liner | 14 |
-| `tests/unit/test_multi_root.py` | 0.104 | one-liner | 16 |
-| `tests/test_scorer.py` | 0.101 | one-liner | 17 |
-| `main.py` | 0.100 | signatures | 13 |
-| `tests/unit/test_safety.py` | 0.091 | one-liner | 18 |
-| `tests/unit/test_cycles.py` | 0.087 | one-liner | 15 |
-| `src/codectx/ignore.py` | 0.083 | signatures | 219 |
-| `tests/unit/test_cli.py` | 0.077 | one-liner | 14 |
-| `tests/unit/test_cache_wiring.py` | 0.077 | one-liner | 20 |
+| `src/codectx/config/defaults.py` | 0.697 | structured summary | 25 |
+| `src/codectx/cli.py` | 0.681 | full source | 2189 |
+| `src/codectx/graph/builder.py` | 0.647 | structured summary | 134 |
+| `src/codectx/output/formatter.py` | 0.647 | structured summary | 150 |
+| `src/codectx/ranker/scorer.py` | 0.572 | structured summary | 150 |
+| `src/codectx/parser/base.py` | 0.550 | structured summary | 91 |
+| `src/codectx/walker.py` | 0.497 | structured summary | 186 |
+| `src/codectx/ranker/git_meta.py` | 0.456 | structured summary | 194 |
+| `src/codectx/compressor/tiered.py` | 0.451 | structured summary | 164 |
+| `src/codectx/parser/treesitter.py` | 0.401 | structured summary | 161 |
+| `src/codectx/ranker/semantic.py` | 0.382 | structured summary | 115 |
+| `pyproject.toml` | 0.306 | structured summary | 14 |
+| `src/codectx/config/loader.py` | 0.300 | structured summary | 200 |
+| `tests/unit/test_semantic.py` | 0.297 | one-liner | 17 |
+| `src/codectx/cache.py` | 0.250 | signatures | 103 |
+| `src/codectx/graph/resolver.py` | 0.234 | signatures | 537 |
+| `src/codectx/output/sections.py` | 0.234 | signatures | 38 |
+| `tests/test_scorer.py` | 0.231 | one-liner | 17 |
+| `tests/test_walker.py` | 0.231 | one-liner | 15 |
+| `tests/unit/test_git_meta.py` | 0.231 | one-liner | 16 |
+| `tests/test_integration.py` | 0.209 | one-liner | 20 |
+| `src/codectx/compressor/budget.py` | 0.200 | signatures | 74 |
+| `tests/unit/test_call_paths.py` | 0.181 | one-liner | 18 |
+| `tests/unit/test_safety.py` | 0.181 | one-liner | 18 |
+| `tests/unit/test_cache_export.py` | 0.176 | one-liner | 17 |
+| `PLAN.md` | 0.172 | signatures | 13 |
+| `tests/unit/test_formatter_coverage.py` | 0.159 | one-liner | 15 |
+| `tests/unit/test_formatter_sections.py` | 0.159 | one-liner | 19 |
+| `.gitignore` | 0.151 | signatures | 13 |
+| `src/codectx/parser/languages.py` | 0.141 | signatures | 174 |
+| `tests/test_compressor.py` | 0.134 | one-liner | 18 |
+| `tests/unit/test_summarizer.py` | 0.134 | one-liner | 19 |
+| `tests/unit/test_treesitter.py` | 0.134 | one-liner | 18 |
+| `src/codectx/compressor/summarizer.py` | 0.134 | signatures | 348 |
+| `README.md` | 0.126 | signatures | 13 |
+| `tests/unit/test_resolver.py` | 0.126 | one-liner | 14 |
+| `tests/unit/test_multi_root.py` | 0.125 | one-liner | 16 |
+| `main.py` | 0.125 | signatures | 13 |
+| `tests/unit/test_cycles.py` | 0.109 | one-liner | 15 |
+| `src/codectx/ignore.py` | 0.108 | signatures | 219 |
 
 ## PERIPHERY
 
-- `tests/test_integration.py` — Integration test — runs codectx pipeline end-to-end.
 - `tests/unit/test_semantic.py` — Tests for semantic search ranking module.
-- `tests/unit/test_cache_export.py` — Tests for CI cache export/import.
+- `tests/test_scorer.py` — Tests for the composite file scorer.
 - `tests/test_walker.py` — Tests for the file walker.
 - `tests/unit/test_git_meta.py` — Tests for git metadata collection.
+- `tests/test_integration.py` — Integration test — runs codectx pipeline end-to-end.
+- `tests/unit/test_call_paths.py` — Tests for call path detection and formatting.
+- `tests/unit/test_safety.py` — Tests for safety checks in pipeline flow.
+- `tests/unit/test_cache_export.py` — Tests for CI cache export/import.
 - `tests/unit/test_formatter_coverage.py` — Tests for output formatting.
 - `tests/unit/test_formatter_sections.py` — Tests for deterministic formatter section ordering and presence.
 - `tests/test_compressor.py` — Tests for tiered compression and token budget.
@@ -994,42 +1001,39 @@ graph LR
 - `tests/unit/test_treesitter.py` — Tests for multi-language treesitter parsing.
 - `tests/unit/test_resolver.py` — Tests for import resolution.
 - `tests/unit/test_multi_root.py` — Tests for multi-root support.
-- `tests/test_scorer.py` — Tests for the composite file scorer.
-- `tests/unit/test_safety.py` — Tests for safety checks in pipeline flow.
 - `tests/unit/test_cycles.py` — Tests for cyclic dependency detection.
 - `tests/unit/test_cli.py` — Tests for CLI commands.
 - `tests/unit/test_cache_wiring.py` — Tests for cache wiring into the analyze pipeline.
 - `src/codectx/__init__.py` — codectx — Codebase context compiler for AI agents.
 - `src/codectx/safety.py` — Sensitive-file detection and user confirmation.
+- `docs/CONTEXT.md` — 138 lines
 - `tests/unit/test_queries.py` — Tests for .scm query file loading and data-driven extraction.
 - `tests/unit/test_semantic_mock.py` — Mock tests for semantic logic.
 - `tests/test_parser.py` — Tests for tree-sitter parsing.
 - `tests/test_ignore.py` — Tests for ignore-spec handling.
-- `tests/unit/test_call_paths.py` — Tests for call path detection and formatting.
 - `docs/astro.config.mjs` — 2 imports, 74 lines
 - `docs/package.json` — 26 lines
-- `ARCHITECTURE.md` — 271 lines
+- `ARCHITECTURE.md` — 252 lines
 - `DECISIONS.md` — 262 lines
-- `PLAN.md` — 175 lines
 - `docs/src/content.config.ts` — 3 imports, 7 lines
 - `docs/build_output.txt` — 382 lines
-- `docs/src/content/docs/advanced/dependency-graph.md` — 19 lines
-- `docs/src/content/docs/advanced/ranking-system.md` — 32 lines
-- `docs/src/content/docs/advanced/token-compression.md` — 23 lines
+- `docs/src/content/docs/advanced/dependency-graph.md` — 23 lines
+- `docs/src/content/docs/advanced/ranking-system.md` — 41 lines
+- `docs/src/content/docs/advanced/token-compression.md` — 27 lines
 - `docs/src/content/docs/community/contributing.md` — 52 lines
 - `docs/src/content/docs/community/faq.md` — 23 lines
 - `docs/src/content/docs/comparison.md` — 31 lines
-- `docs/src/content/docs/getting-started/basic-usage.md` — 45 lines
-- `docs/src/content/docs/getting-started/installation.md` — 51 lines
-- `docs/src/content/docs/getting-started/quick-start.mdx` — 40 lines
+- `docs/src/content/docs/getting-started/basic-usage.md` — 63 lines
+- `docs/src/content/docs/getting-started/installation.md` — 62 lines
+- `docs/src/content/docs/getting-started/quick-start.mdx` — 44 lines
 - `docs/src/content/docs/guides/best-practices.md` — 34 lines
-- `docs/src/content/docs/guides/configuration.md` — 41 lines
+- `docs/src/content/docs/guides/configuration.md` — 53 lines
 - `docs/src/content/docs/guides/using-context-effectively.md` — 34 lines
 - `docs/src/content/docs/index.mdx` — 32 lines
-- `docs/src/content/docs/introduction/what-is-codectx.md` — 20 lines
+- `docs/src/content/docs/introduction/what-is-codectx.md` — 22 lines
 - `docs/src/content/docs/introduction/why-it-exists.md` — 20 lines
-- `docs/src/content/docs/reference/architecture-overview.md` — 19 lines
-- `docs/src/content/docs/reference/cli-reference.md` — 38 lines
+- `docs/src/content/docs/reference/architecture-overview.md` — 33 lines
+- `docs/src/content/docs/reference/cli-reference.md` — 116 lines
 - `docs/src/env.d.ts` — 3 lines
 - `docs/src/styles/custom.css` — 19 lines
 - `docs/tsconfig.json` — 10 lines

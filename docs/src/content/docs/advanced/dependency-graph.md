@@ -13,6 +13,10 @@ AI coding models are highly proficient at isolated logic problems, but they stru
 2. **Path Normalization**: The crawler converts all relative and aliased imports into normalized absolute paths within the repository.
 3. **Graph Rendering**: The backend uses an undirected graph topology. It groups files into highly connected clusters and renders an ASCII representation of the connections for the LLM.
 
+## Known Limitations
+
+- **Go Resolvers**: Currently, Go import paths are not fully resolved until explicit `go.mod` parsing is implemented in a future release. Dependency edges might omit elements in Go projects heavily reliant on modular packages.
+
 ## Why it works for LLMs
 
 Models like Claude and GPT-4 process sequential text. When presented with a graph as markdown structured text, they can "trace" variable flow backwards to its source conceptually *before* they even begin generating their response, significantly improving response accuracy on complex structural changes.
