@@ -12,7 +12,9 @@ This document outlines the current capabilities and planned improvements for cod
 - ✅ File ranking using composite scoring (git frequency, dependency centrality, recency)
 - ✅ Token-aware compression with tier-based truncation
 - ✅ Structured markdown output (CONTEXT.md)
+
 - ✅ Deterministic output across runs
+- ✅ Symlink-safe walker and proper `.venv/` exclusion
 
 ### Language Support
 
@@ -44,7 +46,9 @@ This document outlines the current capabilities and planned improvements for cod
 - ✅ Unit tests for core modules (parser, ranker, compressor)
 - ✅ Integration tests on real repositories
 - ✅ Type checking (mypy strict mode)
+
 - ✅ Linting (ruff)
+- ✅ Added tests for walker `.venv` exclusion, symlink handling, and git metadata edge cases
 
 ---
 
@@ -52,9 +56,12 @@ This document outlines the current capabilities and planned improvements for cod
 
 ### Enhanced Ranking
 
+
 - [ ] **Semantic similarity ranking** — optional embedding-based file importance using `sentence-transformers` and `lancedb`
-- [ ] **Task-aware context** — adjust ranking weights based on task type (debug, feature, architecture, refactor)
-- [ ] **Call path analysis** — identify and highlight critical execution flows from entry points
+- ✅ **Task-aware context** — adjust ranking weights based on task type (debug, feature, architecture, refactor)
+- ✅ **Call path analysis** — identify and highlight critical execution flows from entry points
+
+Note: A `refactor` task profile and initial call-path discovery are implemented; formatter accepts a `task` parameter to opt in.
 
 ### Parser Improvements
 

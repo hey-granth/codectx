@@ -13,8 +13,7 @@ def _git(cwd: Path, *args: str) -> None:
         ["git", *args],
         cwd=cwd,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -126,4 +125,3 @@ def test_collect_git_metadata_walks_non_main_default_branch(tmp_path: Path) -> N
 
     assert file_path in result
     assert result[file_path].commit_count >= 1
-

@@ -139,53 +139,60 @@ class DepGraph:
             result.update(cycle)
         return result
 
-    def detect_call_paths(self, max_depth: int = 5) -> list[list[Path]]:
+    def detect_call_paths(self, max_depth: int = 5, max_paths: int = 3) -> list[list[Path]]:
         """Detect important call paths starting from entrypoints.
 
         Algorithm:
         - start from entrypoints
-        - follow dependency graph edges
+        - follow dependency graph edges, prioritizing high fan-in nodes
         - limit depth to max_depth
-        - prioritize high fan-in nodes
+        - limit total paths to max_paths
         """
-        paths: list[list[Path]] = []
+        all_paths: list[list[Path]] = []
         entries = self.entry_points()
 
         for entry in entries:
-            current = entry
-            path = [current]
+            # BFS-like exploration to find multiple paths
+            queue: deque[list[Path]] = deque([[entry]])
 
-            idx = self.path_to_idx.get(current)
-            if idx is None:
-                continue
+            while queue and len(all_paths) < max_paths:
+                path = queue.popleft()
+                current = path[-1]
 
-            visited = {idx}
+                if len(path) >= max_depth:
+                    all_paths.append(path)
+                    continue
 
-            for _ in range(max_depth - 1):
-                curr_idx = self.path_to_idx[current]
+                curr_idx = self.path_to_idx.get(current)
+                if curr_idx is None:
+                    all_paths.append(path)
+                    continue
+
                 successors = list(self.graph.successor_indices(curr_idx))
                 if not successors:
-                    break
+                    all_paths.append(path)
+                    continue
 
                 # Sort by fan-in (in-degree) descending
                 successors.sort(key=lambda s: self.graph.in_degree(s), reverse=True)
 
-                next_node = None
-                for s in successors:
-                    if s not in visited:
-                        next_node = s
-                        break
+                # Extend paths
+                path_extended = False
+                for s_idx in successors:
+                    # Avoid trivial cycles in path
+                    if self.idx_to_path.get(s_idx) in path:
+                        continue
 
-                if next_node is None:
-                    break
+                    new_path = path + [self.idx_to_path[s_idx]]
+                    queue.append(new_path)
+                    path_extended = True
 
-                visited.add(next_node)
-                current = self.idx_to_path[next_node]
-                path.append(current)
+                if not path_extended:
+                    all_paths.append(path)
 
-            paths.append(path)
-
-        return paths
+        # Sort by length and then by path content
+        all_paths.sort(key=lambda p: (-len(p), [str(x) for x in p]))
+        return all_paths[:max_paths]
 
     @property
     def node_count(self) -> int:

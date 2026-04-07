@@ -143,13 +143,16 @@ def test_refactor_profile_differs_from_default(tmp_path: Path) -> None:
     }
 
     default_scores = score_files(files, graph, git_meta, parse_results=parse_results)
-    refactor_scores = score_files(files, graph, git_meta, task="refactor", parse_results=parse_results)
+    refactor_scores = score_files(
+        files, graph, git_meta, task="refactor", parse_results=parse_results
+    )
 
-    default_ranked = [p for p, _ in sorted(default_scores.items(), key=lambda x: (-x[1], x[0].as_posix()))]
+    default_ranked = [
+        p for p, _ in sorted(default_scores.items(), key=lambda x: (-x[1], x[0].as_posix()))
+    ]
     refactor_ranked = [
         p for p, _ in sorted(refactor_scores.items(), key=lambda x: (-x[1], x[0].as_posix()))
     ]
 
     assert default_ranked != refactor_ranked
     assert refactor_ranked[0] == core_file
-

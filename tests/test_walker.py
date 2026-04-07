@@ -81,7 +81,9 @@ def test_walk_returns_absolute_paths(temp_repo: Path) -> None:
 
 def test_walk_skips_deep_files_inside_dotvenv(tmp_path: Path) -> None:
     """Walker should not return any files from inside .venv."""
-    cert_path = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "certifi" / "cacert.pem"
+    cert_path = (
+        tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "certifi" / "cacert.pem"
+    )
     cert_path.parent.mkdir(parents=True)
     cert_path.write_text("fake cert\n")
     (tmp_path / "main.py").write_text("def main():\n    pass\n")
@@ -110,4 +112,3 @@ def test_walk_does_not_follow_symlinked_external_directory(tmp_path: Path) -> No
 
     assert "main.py" in rel_paths
     assert all(not p.startswith("vendor_link/") for p in rel_paths)
-

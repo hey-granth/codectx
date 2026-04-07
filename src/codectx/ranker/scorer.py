@@ -72,6 +72,13 @@ def score_files(
         w_rec = 0.05
         w_prox = 0.15
         w_dir = 0.10
+    elif task == "refactor":
+        # Emphasize high fan-in and symbol density, de-emphasize recency.
+        w_freq = 0.10
+        w_fan = 0.50
+        w_rec = 0.05  # Low weight for recency
+        w_prox = 0.10
+        w_sym = 0.25  # High weight for symbol density
 
     # normalize weights
     total_w = w_freq + w_fan + w_rec + w_prox + w_sym + w_dir
@@ -114,7 +121,11 @@ def score_files(
         raw_fan_in[f] = float(dep_graph.fan_in(f))
 
         days_since = max((now - info.last_modified_ts) / 86400.0, 0.0) if info else 365.0
-        raw_recency[f] = 1.0 / (1.0 + days_since)
+        if task == "refactor":
+            # For refactoring, older files are more interesting.
+            raw_recency[f] = days_since
+        else:
+            raw_recency[f] = 1.0 / (1.0 + days_since)
 
         dist = entry_distances.get(f)
         if dist is not None:

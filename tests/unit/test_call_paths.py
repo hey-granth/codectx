@@ -159,6 +159,3 @@ def test_formatter_enhanced_call_paths_are_task_opt_in(tmp_path: Path) -> None:
 
     assert default_text.count("main.main()") == 1
     assert arch_text.count("main.main()") == 3
-
-
-

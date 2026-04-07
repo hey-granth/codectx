@@ -93,4 +93,3 @@ def test_pipeline_query_flows_to_score_files(tmp_path: Path) -> None:
     assert mock_semantic.called
     assert mock_score.called
     assert mock_score.call_args.kwargs.get("semantic_scores") == sem_scores
-

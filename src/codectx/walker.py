@@ -68,6 +68,10 @@ def _collect(
     for entry in entries:
         if should_ignore(spec, entry, root):
             continue
+        # Explicitly skip symlinks to prevent following them, especially into
+        # ignored directories like .venv on systems where parts are symlinked.
+        if entry.is_symlink():
+            continue
         if entry.is_dir():
             _collect(entry, root, spec, out)
         elif entry.is_file():
