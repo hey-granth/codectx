@@ -1,8 +1,7 @@
 # codectx
 
 [![PyPI](https://img.shields.io/pypi/v/codectx)](https://pypi.org/project/codectx/)
-[![Downloads](https://img.shields.io/pypi/dm/codectx)](https://pypi.org/project/codectx/)
-[![Python](https://img.shields.io/pypi/pyversions/codectx)](https://github.com/hey-granth/codectx)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/codectx?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/codectx)[![Python](https://img.shields.io/pypi/pyversions/codectx)](https://github.com/hey-granth/codectx)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/hey-granth/codectx/blob/main/LICENSE)
 
 A CLI tool that compiles repository context for AI agents — ranking files by importance, compressing them into structured summaries, and emitting a single markdown document optimized for LLM reasoning.
