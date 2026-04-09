@@ -98,6 +98,7 @@ class Cache:
             docstrings_value = entry.get("docstrings", [])
             raw_source_value = entry.get("raw_source", "")
             line_count_value = entry.get("line_count", 0)
+            file_size_value = entry.get("file_size_bytes", 0)
 
             if not isinstance(path_value, str) or not isinstance(language_value, str):
                 return None
@@ -111,6 +112,9 @@ class Cache:
             line_count = _coerce_int(line_count_value)
             if line_count is None:
                 return None
+            file_size_bytes = _coerce_int(file_size_value)
+            if file_size_bytes is None:
+                file_size_bytes = len(raw_source_value.encode("utf-8", errors="replace"))
 
             return ParseResult(
                 path=Path(path_value),
@@ -121,6 +125,8 @@ class Cache:
                 raw_source=raw_source_value,
                 line_count=line_count,
                 partial_parse=bool(entry.get("partial_parse", False)),
+                parse_failed=bool(entry.get("parse_failed", False)),
+                file_size_bytes=file_size_bytes,
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.debug("Cache entry invalid for %s: %s", path, exc)
@@ -138,6 +144,8 @@ class Cache:
             "raw_source": result.raw_source,
             "line_count": result.line_count,
             "partial_parse": result.partial_parse,
+            "parse_failed": result.parse_failed,
+            "file_size_bytes": result.file_size_bytes,
         }
 
     def get_token_count(self, path: Path, file_hash: str) -> int | None:

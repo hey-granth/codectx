@@ -31,6 +31,8 @@ class ParseResult:
     raw_source: str
     line_count: int
     partial_parse: bool = False
+    parse_failed: bool = False
+    file_size_bytes: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -48,4 +50,6 @@ def make_plaintext_result(path: Path, source: str) -> ParseResult:
         raw_source=source,
         line_count=source.count("\n") + 1 if source else 0,
         partial_parse=False,
+        parse_failed=False,
+        file_size_bytes=len(source.encode("utf-8", errors="replace")),
     )

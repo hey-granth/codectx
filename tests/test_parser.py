@@ -121,3 +121,23 @@ def test_parse_fallback_marks_partial(tmp_path: Path, monkeypatch: pytest.Monkey
     assert result.language == "python"
     assert result.partial_parse is True
     assert any("import os" in imp for imp in result.imports)
+
+
+def test_typescript_failure_does_not_raise(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TypeScript parser failures must degrade gracefully without bubbling exceptions."""
+    f = tmp_path / "broken.ts"
+    f.write_text("import x from './x'\n")
+
+    def _boom(_entry: object) -> object:
+        raise RuntimeError("forced typescript loader failure")
+
+    monkeypatch.setattr(ts, "get_ts_language_object", _boom)
+    result = parse_file(f)
+
+    assert result.language == "typescript"
+    assert result.partial_parse is True
+    assert result.parse_failed is True
+    assert any("import" in imp for imp in result.imports)

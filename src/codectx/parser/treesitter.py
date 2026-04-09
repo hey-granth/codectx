@@ -155,15 +155,25 @@ def parse_files(files: list[Path]) -> dict[Path, ParseResult]:
 
     # Parse tree-sitter files in parallel
     if parseable:
-        # Serialize the language entry for cross-process transfer
-        work_items = [(str(p), e.name, e.ts_module_name) for p, e in parseable]
+        # Serialize language metadata for cross-process transfer.
+        work_items = [(str(p), e.name, e.ts_module_name, e.language_fn) for p, e in parseable]
 
-        ctx = multiprocessing.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=MAX_PARSER_WORKERS, mp_context=ctx) as pool:
-            parsed = list(pool.map(_parse_single_worker, work_items))
+        parsed: list[ParseResult]
+        try:
+            ctx = multiprocessing.get_context("spawn")
+            with ProcessPoolExecutor(max_workers=MAX_PARSER_WORKERS, mp_context=ctx) as pool:
+                parsed = list(pool.map(_parse_single_worker, work_items))
+        except Exception as exc:
+            logger.warning("tree-sitter worker pool failed; retrying sequentially: %s", exc)
+            parsed = []
+            for path, entry in parseable:
+                source = _read_source(path)
+                parsed.append(_extract(path, source, entry))
 
         for pr in parsed:
             results[pr.path] = pr
+
+        _log_parse_health(parseable, results)
 
     return results
 
@@ -182,14 +192,60 @@ def parse_file(path: Path) -> ParseResult:
 # ---------------------------------------------------------------------------
 
 
-def _parse_single_worker(args: tuple[str, str, str]) -> ParseResult:
+def _parse_single_worker(args: tuple[str, str, str, str]) -> ParseResult:
     """Worker function for ProcessPoolExecutor. Receives serializable args."""
-    path_str, lang_name, ts_module_name = args
+    path_str, lang_name, ts_module_name, language_fn = args
     path = Path(path_str)
     source = _read_source(path)
 
-    entry = LanguageEntry(name=lang_name, ts_module_name=ts_module_name, extensions=())
+    entry = LanguageEntry(
+        name=lang_name,
+        ts_module_name=ts_module_name,
+        extensions=(),
+        language_fn=language_fn,
+    )
     return _extract(path, source, entry)
+
+
+def _log_parse_health(
+    parseable: list[tuple[Path, LanguageEntry]],
+    results: dict[Path, ParseResult],
+) -> None:
+    """Log aggregate parser outcomes once per parse run."""
+    attempted = len(parseable)
+    if attempted == 0:
+        return
+
+    failures: list[Path] = []
+    per_language: dict[str, dict[str, int]] = {}
+
+    for path, entry in parseable:
+        stats = per_language.setdefault(entry.name, {"total": 0, "success": 0, "failed": 0})
+        stats["total"] += 1
+        result = results.get(path)
+        if result is None or bool(getattr(result, "parse_failed", False)):
+            stats["failed"] += 1
+            failures.append(path)
+        else:
+            stats["success"] += 1
+
+    if failures:
+        sample = ", ".join(str(p) for p in failures[:3])
+        logger.warning(
+            "tree-sitter parse summary: attempted=%d failed=%d sample=[%s]",
+            attempted,
+            len(failures),
+            sample,
+        )
+    else:
+        logger.info("tree-sitter parse summary: attempted=%d failed=0", attempted)
+
+    if logger.isEnabledFor(logging.INFO):
+        health = ", ".join(
+            f"{lang}: total={stats['total']} success={stats['success']} failed={stats['failed']}"
+            for lang, stats in sorted(per_language.items())
+        )
+        logger.info("tree-sitter language health: %s", health)
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +259,7 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
         ts_lang = get_ts_language_object(entry)
         parser = tree_sitter.Parser(ts_lang)
         tree = parser.parse(source.encode("utf-8"))
-    except Exception as exc:
-        logger.warning("tree-sitter parse failed for %s: %s", path, exc)
+    except Exception:
         return _fallback_parse(path, source, entry.name)
 
     root_node = tree.root_node
@@ -222,6 +277,8 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
         raw_source=source,
         line_count=source.count("\n") + 1 if source else 0,
         partial_parse=False,
+        parse_failed=False,
+        file_size_bytes=len(source.encode("utf-8", errors="replace")),
     )
 
 
@@ -238,6 +295,8 @@ def _fallback_parse(path: Path, source: str, language: str) -> ParseResult:
         raw_source=source,
         line_count=source.count("\n") + 1 if source else 0,
         partial_parse=True,
+        parse_failed=True,
+        file_size_bytes=len(source.encode("utf-8", errors="replace")),
     )
 
 
