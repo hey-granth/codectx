@@ -1,0 +1,10 @@
+services:
+  codectx:
+    image: ghcr.io/hey-granth/codectx:latest
+    working_dir: /workspace
+    volumes:
+      - ./:/repo
+
+    # Example: override command for a one-shot analyze run
+    # command: ["analyze", "/repo", "--tokens", "60000"]
+

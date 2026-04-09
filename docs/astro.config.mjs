@@ -37,6 +37,7 @@ export default defineConfig({
             { label: 'Using CONTEXT.md effectively', link: '/guides/using-context-effectively/' },
             { label: 'Best Practices', link: '/guides/best-practices/' },
             { label: 'Configuration', link: '/guides/configuration/' },
+            { label: 'Docker', link: '/guides/docker/' },
           ],
         },
         {

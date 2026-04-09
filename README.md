@@ -58,6 +58,24 @@ uv add codectx
 pipx install codectx
 ```
 
+## Docker
+
+Run `codectx` without installing Python locally:
+
+```bash
+docker run --rm -v /path/to/repo:/repo ghcr.io/hey-granth/codectx analyze /repo
+```
+
+This writes `CONTEXT.md` into your host repository because `/repo` is a bind mount.
+
+On Linux, if you see permission errors on mounted files, run with your host UID/GID:
+
+```bash
+docker run --rm --user $(id -u):$(id -g) -v /path/to/repo:/repo ghcr.io/hey-granth/codectx analyze /repo
+```
+
+See the full [Docker guide](docs/src/content/docs/guides/docker.md).
+
 ## Quick start
 
 ```bash
