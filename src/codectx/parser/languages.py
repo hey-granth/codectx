@@ -78,7 +78,8 @@ def _coerce_language(value: Any) -> tree_sitter.Language:
     """Normalize any supported language payload into a Language object."""
     language_type = getattr(tree_sitter, "Language", None)
     if isinstance(language_type, type) and isinstance(value, language_type):
-        return value
+        from typing import cast
+        return cast(tree_sitter.Language, value)
     return tree_sitter.Language(value)
 
 
@@ -129,7 +130,7 @@ def load_typescript_language(language_fn: str = "language_typescript") -> tree_s
             continue
         try:
             # Older tree-sitter Python bindings use Language(path, grammar_name).
-            return tree_sitter.Language(lib_path, symbol)
+            return tree_sitter.Language(lib_path, symbol)  # type: ignore[no-any-return, call-overload]
         except Exception as exc:
             attempts.append(f"Language({lib_path!r}, {symbol!r}): {exc}")
 

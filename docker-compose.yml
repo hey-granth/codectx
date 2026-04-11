@@ -1,7 +1,10 @@
 services:
   codectx:
-    image: ghcr.io/hey-granth/codectx:latest
-    working_dir: /workspace
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: codectx-local
+    working_dir: /repo
     volumes:
       - ./:/repo
 
