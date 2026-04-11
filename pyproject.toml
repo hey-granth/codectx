@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codectx"
-version = "0.2.0"
+version = "0.2.1"
 description = "Codebase context compiler for AI agents"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "MIT" }
