@@ -9,12 +9,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
+try:
+    import openai
+    import anthropic
+    import httpx
+    LLM_DEPS_AVAILABLE = True
+except ImportError:
+    LLM_DEPS_AVAILABLE = False
+
+if LLM_DEPS_AVAILABLE:
+    from codectx.llm import llm_summarize
+else:
+    llm_summarize = None  # type: ignore
+
 from codectx.cli import app
-from codectx.llm import llm_summarize
 
 runner = CliRunner()
 
 
+@pytest.mark.skipif(not LLM_DEPS_AVAILABLE, reason="LLM dependencies not available")
 def test_llm_summarize_openai() -> None:
     completion = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content="Summary text"))]
@@ -37,6 +50,7 @@ def test_llm_summarize_openai() -> None:
     assert result == "Summary text"
 
 
+@pytest.mark.skipif(not LLM_DEPS_AVAILABLE, reason="LLM dependencies not available")
 def test_llm_summarize_fallback_on_error() -> None:
     with patch("openai.AsyncOpenAI", side_effect=Exception("network error")):
         result = asyncio.run(
@@ -68,6 +82,7 @@ def test_llm_flag_without_dependency_raises_usage_error(
     assert "pip install codectx[llm]" in result.output
 
 
+@pytest.mark.skipif(not LLM_DEPS_AVAILABLE, reason="LLM dependencies not available")
 def test_llm_summarize_anthropic() -> None:
     response = SimpleNamespace(content=[SimpleNamespace(text="Anthropic summary")])
     create = AsyncMock(return_value=response)
@@ -88,6 +103,7 @@ def test_llm_summarize_anthropic() -> None:
     assert result == "Anthropic summary"
 
 
+@pytest.mark.skipif(not LLM_DEPS_AVAILABLE, reason="LLM dependencies not available")
 def test_llm_summarize_ollama() -> None:
     response = MagicMock()
     response.json.return_value = {"message": {"content": "Ollama summary"}}
