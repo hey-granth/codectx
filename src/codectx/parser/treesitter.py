@@ -267,6 +267,7 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
     imports = _extract_imports(root_node, entry.name, source)
     symbols = _extract_symbols(root_node, entry.name, source)
     docstrings = _extract_module_docstrings(root_node, entry.name, source)
+    symbol_usages = _extract_symbol_usages(root_node, source)
 
     return ParseResult(
         path=path,
@@ -279,6 +280,7 @@ def _extract(path: Path, source: str, entry: LanguageEntry) -> ParseResult:
         partial_parse=False,
         parse_failed=False,
         file_size_bytes=len(source.encode("utf-8", errors="replace")),
+        symbol_usages=symbol_usages,
     )
 
 
@@ -297,7 +299,45 @@ def _fallback_parse(path: Path, source: str, language: str) -> ParseResult:
         partial_parse=True,
         parse_failed=True,
         file_size_bytes=len(source.encode("utf-8", errors="replace")),
+        symbol_usages={},
     )
+
+
+def _extract_symbol_usages(node: Any, source: str) -> dict[str, list[str]]:
+    """Collect identifier usages for cross-file symbol linking.
+
+    The value list is reserved for resolved definition paths populated later.
+    """
+    usages: dict[str, list[str]] = {}
+    interesting_parents = {
+        "call",
+        "call_expression",
+        "argument_list",
+        "type",
+        "type_annotation",
+        "decorator",
+        "class_definition",
+        "class_declaration",
+    }
+
+    for current in _walk_tree(node):
+        if current.type not in ("identifier", "type_identifier"):
+            continue
+        parent = getattr(current, "parent", None)
+        parent_type = getattr(parent, "type", "") if parent is not None else ""
+        if parent_type and parent_type not in interesting_parents:
+            continue
+
+        try:
+            name = _node_text(current, source).strip()
+        except Exception:
+            continue
+        if not name or not name[0].isalpha() and name[0] != "_":
+            continue
+        if name not in usages:
+            usages[name] = []
+
+    return usages
 
 
 def _regex_imports(source: str, language: str) -> list[str]:

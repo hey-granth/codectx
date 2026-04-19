@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from codectx.compressor.tiered import CompressedFile
@@ -19,6 +22,94 @@ from codectx.output.sections import (
     SYMBOL_INDEX,
 )
 from codectx.parser.base import ParseResult
+
+
+@dataclass(frozen=True)
+class CompressionFileRecord:
+    path: str
+    tier: str
+    tokens: int
+    rank_score: float
+    summary: str
+    included: bool
+
+
+@dataclass(frozen=True)
+class CompressionResult:
+    version: str
+    generated_at: str
+    repository: str
+    budget_tokens: int
+    files: list[CompressionFileRecord]
+    symbol_index: dict[str, str]
+    stats: dict[str, int]
+
+
+def build_compression_result(
+    compressed: list[CompressedFile],
+    root: Path,
+    budget_tokens: int,
+    parse_results: dict[Path, ParseResult] | None = None,
+    version: str = "0.3.0",
+) -> CompressionResult:
+    def tier_name(tier: int) -> str:
+        if tier == 1:
+            return "CORE"
+        if tier == 2:
+            return "SUPPORTING"
+        return "PERIPHERAL"
+
+    files: list[CompressionFileRecord] = []
+    for cf in sorted(compressed, key=lambda item: (-item.score, item.path.as_posix())):
+        rel = cf.path.relative_to(root).as_posix()
+        summary = ""
+        for line in cf.content.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("###") and not stripped.startswith("```"):
+                summary = stripped
+                break
+        files.append(
+            CompressionFileRecord(
+                path=rel,
+                tier=tier_name(cf.tier),
+                tokens=cf.token_count,
+                rank_score=round(cf.score, 6),
+                summary=summary,
+                included=True,
+            )
+        )
+
+    symbol_index: dict[str, str] = {}
+    if parse_results:
+        for path, result in sorted(parse_results.items(), key=lambda item: item[0].as_posix()):
+            rel = path.relative_to(root).as_posix()
+            for symbol in result.symbols:
+                name = symbol.name.strip()
+                if name and name not in symbol_index:
+                    symbol_index[name] = rel
+
+    stats = {
+        "total_files": len(parse_results) if parse_results is not None else len(files),
+        "included_files": len(files),
+        "total_tokens": sum(file.tokens for file in files),
+        "core_count": sum(1 for file in files if file.tier == "CORE"),
+        "supporting_count": sum(1 for file in files if file.tier == "SUPPORTING"),
+        "peripheral_count": sum(1 for file in files if file.tier == "PERIPHERAL"),
+    }
+
+    return CompressionResult(
+        version=version,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        repository=str(root.resolve()),
+        budget_tokens=budget_tokens,
+        files=files,
+        symbol_index=symbol_index,
+        stats=stats,
+    )
+
+
+def format_json(result: CompressionResult) -> str:
+    return json.dumps(asdict(result), indent=2, sort_keys=False)
 
 
 def _root_label(file_path: Path, roots: list[Path] | None) -> str:

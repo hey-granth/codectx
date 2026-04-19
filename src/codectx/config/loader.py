@@ -31,9 +31,14 @@ class Config:
     llm_enabled: bool = False
     llm_provider: str = "openai"
     llm_model: str = ""
+    llm_api_key: str | None = None
+    llm_base_url: str | None = None
+    llm_max_tokens: int = 256
     query: str = ""
     task: str = "default"
     layers: bool = False
+    output_format: str = "markdown"
+    debounce: float = 3.0
     roots: list[Path] = field(default_factory=list)
     extra_ignore: tuple[str, ...] = field(default_factory=tuple)
 
@@ -82,9 +87,14 @@ def load_config(root: Path, **cli_overrides: object) -> Config:
     llm_enabled = _resolve_bool("llm_enabled", cli_overrides, file_config, False)
     llm_provider = _resolve_str("llm_provider", cli_overrides, file_config, "openai")
     llm_model = _resolve_str("llm_model", cli_overrides, file_config, "")
+    llm_api_key = _resolve_optional_str("llm_api_key", cli_overrides, file_config, None)
+    llm_base_url = _resolve_optional_str("llm_base_url", cli_overrides, file_config, None)
+    llm_max_tokens = _resolve_int("llm_max_tokens", cli_overrides, file_config, 256)
     query = _resolve_str("query", cli_overrides, file_config, "")
     task = _resolve_str("task", cli_overrides, file_config, "default")
     layers = _resolve_bool("layers", cli_overrides, file_config, False)
+    output_format = _resolve_str("output_format", cli_overrides, file_config, "markdown")
+    debounce = _resolve_float("debounce", cli_overrides, file_config, 3.0)
 
     # Roots: from config or CLI overrides, defaults to [root]
     roots_raw = _resolve("roots", cli_overrides, file_config, None)
@@ -118,9 +128,14 @@ def load_config(root: Path, **cli_overrides: object) -> Config:
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,
         llm_model=llm_model,
+        llm_api_key=llm_api_key,
+        llm_base_url=llm_base_url,
+        llm_max_tokens=llm_max_tokens,
         query=query,
         task=task,
         layers=layers,
+        output_format=output_format,
+        debounce=debounce,
         roots=roots,
         extra_ignore=extra_ignore,
     )
@@ -185,4 +200,20 @@ def _resolve_int(
         return int(value)
     if isinstance(value, str):
         return int(value)
+    raise TypeError(f"Config value for {key!r} must be numeric, got {type(value).__name__}")
+
+
+def _resolve_float(
+    key: str,
+    cli: dict[str, object],
+    file_cfg: dict[str, object],
+    default: float,
+) -> float:
+    value = _resolve(key, cli, file_cfg, default)
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        return float(value)
     raise TypeError(f"Config value for {key!r} must be numeric, got {type(value).__name__}")

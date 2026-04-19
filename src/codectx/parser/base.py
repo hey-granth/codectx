@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -33,6 +33,7 @@ class ParseResult:
     partial_parse: bool = False
     parse_failed: bool = False
     file_size_bytes: int = 0
+    symbol_usages: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def is_empty(self) -> bool:

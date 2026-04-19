@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +25,7 @@ class DepGraph:
     path_to_idx: dict[Path, int] = field(default_factory=dict)
     idx_to_path: dict[int, Path] = field(default_factory=dict)
     cycles: list[list[Path]] = field(default_factory=list)
+    symbol_references: list[SymbolReference] = field(default_factory=list)
 
     def add_file(self, path: Path) -> int:
         """Add a file node, returning its index."""
@@ -34,13 +36,14 @@ class DepGraph:
         self.idx_to_path[idx] = path
         return idx
 
-    def add_edge(self, from_path: Path, to_path: Path) -> None:
-        """Add a directed edge (from imports to)."""
+    def add_edge(self, from_path: Path, to_path: Path, edge_type: str = "import") -> None:
+        """Add a directed edge (from imports/usages to target)."""
         src = self.add_file(from_path)
         dst = self.add_file(to_path)
         # Avoid duplicate edges
-        if not self.graph.has_edge(src, dst):
-            self.graph.add_edge(src, dst, None)
+        if self.graph.has_edge(src, dst):
+            return
+        self.graph.add_edge(src, dst, edge_type)
 
     def fan_in(self, path: Path) -> int:
         """Number of files that import this file (in-degree)."""
@@ -202,6 +205,25 @@ class DepGraph:
     def edge_count(self) -> int:
         return self.graph.num_edges()
 
+    def get_symbol_references(self) -> list[SymbolReference]:
+        return list(self.symbol_references)
+
+
+@dataclass(frozen=True)
+class SymbolReference:
+    symbol: str
+    defined_in: str
+    used_in: str
+
+
+def _extract_used_symbol_names(result: ParseResult) -> set[str]:
+    usages = getattr(result, "symbol_usages", {})
+    if usages:
+        return {str(name) for name in usages if str(name)}
+
+    names = set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", result.raw_source))
+    return {n for n in names if n not in {"def", "class", "import", "from", "return"}}
+
 
 def build_dependency_graph(
     parse_results: dict[Path, ParseResult],
@@ -237,7 +259,31 @@ def build_dependency_graph(
             )
             for target in resolved:
                 if target != path:  # no self-edges
-                    graph.add_edge(path, target)
+                    graph.add_edge(path, target, edge_type="import")
+
+    symbol_definitions: dict[str, Path] = {}
+    for path in sorted(parse_results.keys(), key=lambda p: p.as_posix()):
+        result = parse_results[path]
+        for symbol in result.symbols:
+            name = str(getattr(symbol, "name", "")).strip()
+            if name and name not in symbol_definitions:
+                symbol_definitions[name] = path
+
+    for used_in_path, result in parse_results.items():
+        used_names = _extract_used_symbol_names(result)
+        for name in sorted(used_names):
+            defined_in_path = symbol_definitions.get(name)
+            if defined_in_path is None or defined_in_path == used_in_path:
+                continue
+
+            graph.add_edge(used_in_path, defined_in_path, edge_type="symbol_ref")
+            graph.symbol_references.append(
+                SymbolReference(
+                    symbol=name,
+                    defined_in=defined_in_path.as_posix(),
+                    used_in=used_in_path.as_posix(),
+                )
+            )
 
     # Detect cycles
     try:

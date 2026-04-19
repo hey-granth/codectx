@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+_GO_MODULE_RE = re.compile(r"^module\s+(\S+)")
+
 
 def resolve_import(
     import_text: str,
@@ -30,7 +32,7 @@ def resolve_import(
     elif language in ("javascript", "typescript"):
         return _resolve_js_ts(import_text, source_file, root, all_files)
     elif language == "go":
-        return _resolve_go(import_text, root, all_files)
+        return _resolve_go(import_text, source_file, root, all_files)
     elif language == "rust":
         return _resolve_rust(import_text, source_file, root, all_files)
     elif language == "java":
@@ -280,16 +282,90 @@ def _resolve_js_ts(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_go(import_text: str, root: Path, all_files: frozenset[str]) -> list[Path]:
-    # Go imports are package paths; we try to resolve them relative to root
+def _find_go_mod_root(source_file: Path, repo_root: Path) -> Path | None:
+    current = source_file.parent
+    repo_root_resolved = repo_root.resolve()
+    while True:
+        go_mod = current / "go.mod"
+        if go_mod.exists():
+            return current
+        if current == repo_root_resolved or current.parent == current:
+            break
+        current = current.parent
+
+    repo_go_mod = repo_root / "go.mod"
+    if repo_go_mod.exists():
+        return repo_root
+    return None
+
+
+def _parse_go_module(repo_root: str) -> str | None:
+    go_mod = Path(repo_root) / "go.mod"
+    if not go_mod.exists():
+        return None
+    try:
+        for line in go_mod.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = _GO_MODULE_RE.match(line.strip())
+            if match:
+                return match.group(1)
+    except OSError:
+        return None
+    return None
+
+
+def _resolve_go(
+    import_text: str,
+    source_file: Path,
+    root: Path,
+    all_files: frozenset[str],
+) -> list[Path]:
+    # Go imports are package paths; we resolve local packages and module-prefixed imports.
     m = re.search(r'"([^"]+)"', import_text)
     if not m:
         return []
 
     pkg = m.group(1)
-    # Only resolve local packages (not standard lib)
-    candidates = [f for f in all_files if f.startswith(pkg) and f.endswith(".go")]
-    return [root / c for c in candidates]
+    if "/" not in pkg:
+        return []
+
+    go_root = _find_go_mod_root(source_file, root) or root
+    module_name = _parse_go_module(str(go_root))
+
+    prefixes: list[str] = []
+    if module_name and pkg.startswith(module_name + "/"):
+        prefixes.append(pkg[len(module_name) + 1 :])
+    elif module_name and pkg == module_name:
+        prefixes.append("")
+    else:
+        prefixes.append(pkg)
+
+    resolved: list[Path] = []
+    for prefix in prefixes:
+        normalized_prefix = prefix.strip("/")
+        rel_candidates: list[str] = []
+        if normalized_prefix:
+            rel_candidates.extend(
+                [
+                    f"{normalized_prefix}.go",
+                    f"{normalized_prefix}/main.go",
+                ]
+            )
+            rel_candidates.extend(
+                sorted(
+                    f
+                    for f in all_files
+                    if f.startswith(normalized_prefix + "/") and f.endswith(".go")
+                )
+            )
+        else:
+            rel_candidates.extend(sorted(f for f in all_files if f.endswith(".go")))
+
+        for rel in rel_candidates:
+            if rel in all_files:
+                target = root / rel
+                if target not in resolved:
+                    resolved.append(target)
+    return resolved
 
 
 # ---------------------------------------------------------------------------

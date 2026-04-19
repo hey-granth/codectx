@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +40,87 @@ _NON_SOURCE_DIRS: frozenset[str] = frozenset(
         "script",
     }
 )
+
+_CONFIG_FILENAMES: frozenset[str] = frozenset(
+    {
+        "pyproject.toml",
+        "setup.cfg",
+        "setup.py",
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "Cargo.toml",
+        "Cargo.lock",
+        "go.mod",
+        "go.sum",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "Makefile",
+        "Dockerfile",
+        ".dockerignore",
+        "tsconfig.json",
+        "jest.config.js",
+        "jest.config.ts",
+        ".eslintrc",
+        ".eslintrc.json",
+        ".eslintrc.js",
+        ".prettierrc",
+        "babel.config.js",
+        "vite.config.ts",
+        "webpack.config.js",
+    }
+)
+
+_CONFIG_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".env",
+        ".yaml",
+        ".yml",
+        ".json",
+    }
+)
+
+_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".go",
+        ".rs",
+        ".java",
+        ".c",
+        ".h",
+        ".cpp",
+        ".cc",
+        ".cxx",
+        ".hpp",
+        ".hxx",
+        ".hh",
+        ".rb",
+    }
+)
+
+
+def is_config_file(path: str, imported_by: set[str] | None = None) -> bool:
+    file_path = Path(path)
+    if file_path.name in _CONFIG_FILENAMES:
+        return True
+
+    suffix = file_path.suffix.lower()
+    if suffix not in _CONFIG_EXTENSIONS:
+        return False
+
+    if suffix == ".json":
+        return not imported_by
+    return suffix not in _SOURCE_EXTENSIONS
 
 
 def _is_non_source(path: Path, root: Path) -> bool:
@@ -86,6 +168,7 @@ def compress_files(
     scores: dict[Path, float],
     budget: TokenBudget,
     root: Path,
+    imported_by_map: dict[Path, set[str]] | None = None,
     llm_enabled: bool = False,
     llm_provider: str = "openai",
     llm_model: str = "",
@@ -104,6 +187,10 @@ def compress_files(
     # Force non-source files to Tier 3 regardless of score
     for path in list(tiers.keys()):
         if _is_non_source(path, root):
+            tiers[path] = 3
+            continue
+        imported_by = imported_by_map.get(path) if imported_by_map else None
+        if is_config_file(path.as_posix(), imported_by):
             tiers[path] = 3
 
     # Group and sort files by score, then path
@@ -493,7 +580,9 @@ def _structured_summary_content(pr: ParseResult, path: Path, root: Path) -> str:
 
     class_items: list[tuple[str, str, str, list[str]]] = []
     function_items: list[tuple[str, str]] = []
+    constant_items: list[str] = []
     allowed_dunder = {"__init__", "__call__", "__str__", "__repr__"}
+    constant_name_re = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
     for sym in sorted(
         symbols,
@@ -531,6 +620,50 @@ def _structured_summary_content(pr: ParseResult, path: Path, root: Path) -> str:
                 function_items.append((_truncate_signature(signature or name), doc))
         except Exception:
             continue
+
+    try:
+        import ast
+
+        raw_source = str(getattr(pr, "raw_source", ""))
+        parsed = ast.parse(raw_source)
+        has_types_or_functions = bool(class_items or function_items)
+
+        for node in parsed.body:
+            const_name: str | None = None
+            annotation = ""
+            value_node: ast.AST | None = None
+
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if isinstance(target, ast.Name):
+                    const_name = target.id
+                    value_node = node.value
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                const_name = node.target.id
+                value_node = node.value
+                if node.annotation is not None:
+                    annotation_text = ast.get_source_segment(raw_source, node.annotation) or ""
+                    annotation = annotation_text.strip()
+
+            if not const_name or value_node is None:
+                continue
+
+            include = bool(constant_name_re.match(const_name)) or not has_types_or_functions
+            if not include:
+                continue
+
+            value_text = ast.get_source_segment(raw_source, value_node) or ""
+            value_repr = repr(value_text)
+            display_value = value_text.strip() if value_text.strip() else "<complex expression>"
+            if len(value_repr) > 80:
+                display_value = "<complex expression>"
+
+            if annotation:
+                constant_items.append(f"{const_name}: {annotation} = {display_value}")
+            else:
+                constant_items.append(f"{const_name} = {display_value}")
+    except Exception:
+        constant_items = []
 
     notes: list[str] = []
     try:
@@ -614,6 +747,12 @@ def _structured_summary_content(pr: ParseResult, path: Path, root: Path) -> str:
                 out.append(f"- `{signature}`")
                 if include_function_docs and doc:
                     out.append(f"  - {doc}")
+
+        if constant_items:
+            out.append("")
+            out.append("## Constants")
+            for constant_line in constant_items[:20]:
+                out.append(constant_line)
 
         if include_notes and notes:
             out.append("")

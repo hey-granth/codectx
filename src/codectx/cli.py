@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import typer
 from rich.console import Console
@@ -15,6 +20,81 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from codectx import __version__
 from codectx.config.defaults import CACHE_DIR_NAME
+
+if TYPE_CHECKING:
+    from codectx.output.formatter import CompressionResult
+
+try:
+    from codectx.llm import llm_dependencies_available
+
+    _LLM_AVAILABLE = llm_dependencies_available()
+except Exception:
+    _LLM_AVAILABLE = False
+
+
+_WATCH_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".py",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".go",
+        ".rs",
+        ".java",
+        ".cpp",
+        ".c",
+        ".h",
+        ".rb",
+        ".php",
+    }
+)
+_WATCH_IGNORED_DIRS: frozenset[str] = frozenset(
+    {"__pycache__", ".git", "node_modules", "dist", "build"}
+)
+_WATCH_IGNORED_NAMES: frozenset[str] = frozenset({"package-lock.json", "yarn.lock", "uv.lock"})
+_WATCH_IGNORED_GLOBS: tuple[str, ...] = ("*.pyc", "*.pyo", "*.lock")
+
+
+def _watch_path_is_relevant(path: Path) -> bool:
+    parts = set(path.parts)
+    if parts.intersection(_WATCH_IGNORED_DIRS):
+        return False
+    if path.name in _WATCH_IGNORED_NAMES:
+        return False
+    if any(fnmatch(path.name, pattern) for pattern in _WATCH_IGNORED_GLOBS):
+        return False
+    return path.suffix.lower() in _WATCH_SOURCE_EXTENSIONS
+
+
+class DebouncedHandler:
+    def __init__(self, delay: float, callback: Callable[[set[str]], None]) -> None:
+        self._delay = delay
+        self._callback = callback
+        self._timer: threading.Timer | None = None
+        self._pending: set[str] = set()
+        self._lock = threading.Lock()
+
+    def on_any_event(self, event: Any) -> None:
+        if bool(getattr(event, "is_directory", False)):
+            return
+        src_path = str(getattr(event, "src_path", ""))
+        if not src_path:
+            return
+        with self._lock:
+            self._pending.add(src_path)
+            if self._timer:
+                self._timer.cancel()
+            self._timer = threading.Timer(self._delay, self._fire)
+            self._timer.start()
+
+    def _fire(self) -> None:
+        with self._lock:
+            paths = self._pending.copy()
+            self._pending.clear()
+        callback = self._callback
+        if callable(callback):
+            callback(paths)
+
 
 app = typer.Typer(
     name="codectx",
@@ -83,6 +163,15 @@ def analyze(
         "--extra-root",
         help="Additional root directories for multi-root analysis.",
     ),
+    output_format: str = typer.Option(
+        "markdown", "--format", help="Output format: markdown or json."
+    ),  # noqa: B008
+    llm: bool = typer.Option(False, "--llm/--no-llm", help="Enable LLM-powered summaries."),  # noqa: B008
+    llm_provider: str = typer.Option("openai", "--llm-provider", help="LLM provider."),  # noqa: B008
+    llm_model: str = typer.Option("", "--llm-model", help="LLM model name."),  # noqa: B008
+    llm_api_key: str | None = typer.Option(None, "--llm-api-key", help="LLM API key override."),  # noqa: B008
+    llm_base_url: str | None = typer.Option(None, "--llm-base-url", help="LLM base URL override."),  # noqa: B008
+    llm_max_tokens: int = typer.Option(256, "--llm-max-tokens", help="Max tokens per LLM summary."),  # noqa: B008
 ) -> None:
     """Analyze a codebase and generate CONTEXT.md."""
     _setup_logging(verbose)
@@ -95,6 +184,14 @@ def analyze(
     if extra_roots:
         roots_list = [root] + list(extra_roots)
 
+    if output_format not in {"markdown", "json"}:
+        raise typer.BadParameter("--format must be one of: markdown, json")
+
+    if llm and not _LLM_AVAILABLE:
+        import click
+
+        raise click.UsageError("LLM dependencies missing. Install with: pip install codectx[llm]")
+
     config = load_config(
         root,
         token_budget=tokens,
@@ -106,12 +203,27 @@ def analyze(
         task=task,
         layers=layers,
         roots=roots_list,
+        output_format=output_format,
+        llm_enabled=llm,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_api_key=llm_api_key,
+        llm_base_url=llm_base_url,
+        llm_max_tokens=llm_max_tokens,
     )
 
-    metrics = _run_pipeline(config)
+    metrics = _run_pipeline(config, quiet=output_format == "json")
     elapsed = time.perf_counter() - start_time
 
     ratio = metrics.original_tokens / metrics.context_tokens if metrics.context_tokens > 0 else 0
+
+    if output_format == "json":
+        from codectx.output.formatter import format_json
+
+        if metrics.compression_result is None:
+            raise typer.Exit(1)
+        typer.echo(format_json(metrics.compression_result))
+        return
 
     console.print(
         Panel(
@@ -231,6 +343,7 @@ def watch(
     output: Path = typer.Option(None, "--output", "-o"),  # noqa: B008
     verbose: bool = typer.Option(False, "--verbose", "-v"),  # noqa: B008
     no_git: bool = typer.Option(False, "--no-git"),  # noqa: B008
+    debounce: float = typer.Option(3.0, "--debounce", help="Debounce delay in seconds."),  # noqa: B008
 ) -> None:
     """Watch for file changes and regenerate CONTEXT.md."""
     _setup_logging(verbose)
@@ -244,6 +357,7 @@ def watch(
         verbose=verbose,
         no_git=no_git,
         watch=True,
+        debounce=debounce,
     )
 
     console.print(f"[bold]Watching[/] {config.root} for changes...")
@@ -254,17 +368,51 @@ def watch(
     console.print("[green]Initial context generated.[/]\n")
 
     try:
+        import importlib
+
+        watchdog_observers = importlib.import_module("watchdog.observers")
+        Observer = watchdog_observers.Observer
+    except Exception:
+        # Keep compatibility with environments where watchdog is unavailable.
         from watchfiles import watch as watchfiles_watch
 
-        for changes in watchfiles_watch(str(config.root)):
-            changed_paths = [Path(c[1]) for c in changes]
-            console.print(f"[yellow]Changes detected:[/] {len(changed_paths)} file(s)")
-            try:
+        try:
+            for changes in watchfiles_watch(str(config.root)):
+                changed_paths = [Path(c[1]) for c in changes]
+                relevant = [p for p in changed_paths if _watch_path_is_relevant(p)]
+                if not relevant:
+                    continue
+                console.print(f"[yellow]Changes detected:[/] {len(relevant)} source file(s)")
                 _run_pipeline(config)
                 console.print("[green]Context regenerated.[/]\n")
-            except Exception as exc:
-                console.print(f"[red]Error during regeneration: {exc}[/]\n")
+        except KeyboardInterrupt:
+            console.print("\n[bold]Watch stopped.[/]")
+        return
+
+    observer = Observer()
+
+    def _on_batch(paths: set[str]) -> None:
+        changed_paths = [Path(p) for p in sorted(paths)]
+        relevant = [p for p in changed_paths if _watch_path_is_relevant(p)]
+        if not relevant:
+            return
+        console.print(f"[yellow]Changes detected:[/] {len(relevant)} source file(s)")
+        try:
+            _run_pipeline(config)
+            console.print("[green]Context regenerated.[/]\n")
+        except Exception as exc:
+            console.print(f"[red]Error during regeneration: {exc}[/]\n")
+
+    debounced = DebouncedHandler(float(config.debounce), _on_batch)
+
+    observer.schedule(debounced, str(config.root), recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(0.2)
     except KeyboardInterrupt:
+        observer.stop()
+        observer.join(timeout=2.0)
         console.print("\n[bold]Watch stopped.[/]")
 
 
@@ -468,18 +616,23 @@ class PipelineMetrics:
     files_scanned: int
     original_tokens: int
     context_tokens: int
+    compression_result: CompressionResult | None = None
 
 
-def _run_pipeline(config: object) -> PipelineMetrics:
+def _run_pipeline(config: object, quiet: bool = False) -> PipelineMetrics:
     """Run the full codectx pipeline and return the output metrics."""
     import hashlib
 
     from codectx.cache import Cache
-    from codectx.compressor.budget import TokenBudget
+    from codectx.compressor.budget import TokenBudget, count_tokens
     from codectx.compressor.tiered import compress_files
     from codectx.config.loader import Config
     from codectx.graph.builder import build_dependency_graph
-    from codectx.output.formatter import format_context, write_context_file
+    from codectx.output.formatter import (
+        build_compression_result,
+        format_context,
+        write_context_file,
+    )
     from codectx.parser.base import ParseResult
     from codectx.parser.treesitter import parse_files
     from codectx.ranker.git_meta import collect_git_metadata, collect_recent_changes
@@ -494,6 +647,7 @@ def _run_pipeline(config: object) -> PipelineMetrics:
         TextColumn("[progress.description]{task.description}"),
         console=console,
         transient=True,
+        disable=quiet,
     ) as progress:
         # Step 1: Walk (supports multi-root)
         task = progress.add_task("Discovering files...", total=None)
@@ -587,15 +741,63 @@ def _run_pipeline(config: object) -> PipelineMetrics:
         # Step 5: Compress
         progress.update(task, description="Compressing to token budget...")
         budget = TokenBudget(config.token_budget)
+
+        imported_by_map: dict[Path, set[str]] = {}
+        for target_path, idx in dep_graph.path_to_idx.items():
+            imported_by_map[target_path] = {
+                dep_graph.idx_to_path[pred].as_posix()
+                for pred in dep_graph.graph.predecessor_indices(idx)
+                if pred in dep_graph.idx_to_path
+            }
+
         compressed = compress_files(
             parse_results,
             scores,
             budget,
             config.root,
-            llm_enabled=config.llm_enabled,
-            llm_provider=config.llm_provider,
-            llm_model=config.llm_model,
+            imported_by_map=imported_by_map,
+            llm_enabled=False,
         )
+
+        if config.llm_enabled:
+            from codectx.config.defaults import ENTRYPOINT_FILENAMES
+            from codectx.llm import llm_summarize_sync
+
+            llm_updated = []
+            for cf in compressed:
+                if cf.tier != 1 or cf.path.name in ENTRYPOINT_FILENAMES:
+                    llm_updated.append(cf)
+                    continue
+
+                parsed = parse_results.get(cf.path)
+                source = parsed.raw_source if parsed is not None else ""
+                summary = llm_summarize_sync(
+                    file_path=cf.path.relative_to(config.root).as_posix(),
+                    file_content=source,
+                    provider=config.llm_provider,
+                    model=config.llm_model,
+                    api_key=config.llm_api_key,
+                    base_url=config.llm_base_url,
+                    max_tokens=config.llm_max_tokens,
+                )
+
+                if summary:
+                    new_content = (
+                        f"### `{cf.path.relative_to(config.root).as_posix()}`\n\n{summary}\n"
+                    )
+                    llm_updated.append(
+                        type(cf)(
+                            path=cf.path,
+                            tier=cf.tier,
+                            score=cf.score,
+                            content=new_content,
+                            token_count=count_tokens(new_content),
+                            language=cf.language,
+                        )
+                    )
+                else:
+                    llm_updated.append(cf)
+            compressed = llm_updated
 
         # Step 6: Format and write
         progress.update(task, description="Writing output...")
@@ -615,7 +817,9 @@ def _run_pipeline(config: object) -> PipelineMetrics:
             parse_results=parse_results,
         )
 
-        if config.layers:
+        if config.output_format == "json":
+            output_path = config.root / config.output_file
+        elif config.layers:
             from codectx.output.formatter import write_layer_files
 
             write_layer_files(content_sections, config.root)
@@ -630,15 +834,22 @@ def _run_pipeline(config: object) -> PipelineMetrics:
 
         progress.update(task, description="Done!")
 
-    from codectx.compressor.budget import count_tokens
-
     original_tokens = sum(count_tokens(pr.raw_source) for pr in parse_results.values())
+
+    compression_result = build_compression_result(
+        compressed=compressed,
+        root=config.root,
+        budget_tokens=config.token_budget,
+        parse_results=parse_results,
+        version=os.environ.get("CODECTX_OUTPUT_VERSION", "0.3.0"),
+    )
 
     return PipelineMetrics(
         output_path=output_path,
         files_scanned=len(files),
         original_tokens=original_tokens,
         context_tokens=sum(cf.token_count for cf in compressed),
+        compression_result=compression_result,
     )
 
 

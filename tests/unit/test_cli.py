@@ -64,8 +64,20 @@ def test_search_command_not_found(tmp_path: Path) -> None:
 def test_watch_command_interrupt(tmp_path: Path) -> None:
     (tmp_path / "main.py").write_text("print('hello')\n")
 
-    # Mock watchfiles to yield one change then raise KeyboardInterrupt
-    with patch("watchfiles.watch") as mock_watch:
+    # Force watchfiles fallback path and yield one change then stop.
+    import importlib
+
+    original_import_module = importlib.import_module
+
+    def import_side_effect(name: str, package: str | None = None):
+        if name in {"watchdog.events", "watchdog.observers"}:
+            raise ImportError("no watchdog")
+        return original_import_module(name, package)
+
+    with (
+        patch("importlib.import_module", side_effect=import_side_effect),
+        patch("watchfiles.watch") as mock_watch,
+    ):
 
         def fake_watch(*args, **kwargs):
             yield {(1, str(tmp_path / "main.py"))}
