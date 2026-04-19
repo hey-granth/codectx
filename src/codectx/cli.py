@@ -98,33 +98,43 @@ class DebouncedHandler:
 
 app = typer.Typer(
     name="codectx",
-    help="Codebase context compiler for AI agents.",
+    help="Compile codebase context for AI agents using AST-driven analysis.",
+    epilog="Docs: https://codectx.granth.tech | Source: https://github.com/hey-granth/codectx",
     no_args_is_help=True,
     add_completion=False,
 )
 console = Console(stderr=True)
 
 
-@app.command()
+@app.command(
+    short_help="Analyze a repository and generate compressed context.",
+    help="Analyze a repository and generate compressed context for AI consumption.",
+)
 def analyze(
     root: Path = typer.Argument(  # noqa: B008
         ".",
-        help="Repository root directory to analyze.",
+        help="Path to the repository root (default: current directory).",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
     tokens: int = typer.Option(  # noqa: B008
         None,
+        "--budget",
         "--tokens",
         "-t",
-        help="Token budget (default: 120000).",
+        help="Token budget for context output (default: 120000).",
     ),
     output: Path = typer.Option(  # noqa: B008
         None,
         "--output",
         "-o",
         help="Output file path (default: CONTEXT.md).",
+    ),
+    exclude: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--exclude",
+        help="Glob patterns to exclude (repeatable).",
     ),
     since: str | None = typer.Option(  # noqa: B008
         None,
@@ -164,17 +174,54 @@ def analyze(
         help="Additional root directories for multi-root analysis.",
     ),
     output_format: str = typer.Option(
-        "markdown", "--format", help="Output format: markdown or json."
+        "markdown",
+        "--format",
+        help="Output format: markdown or json (default: markdown).",
     ),  # noqa: B008
-    llm: bool = typer.Option(False, "--llm/--no-llm", help="Enable LLM-powered summaries."),  # noqa: B008
-    llm_provider: str = typer.Option("openai", "--llm-provider", help="LLM provider."),  # noqa: B008
-    llm_model: str = typer.Option("", "--llm-model", help="LLM model name."),  # noqa: B008
-    llm_api_key: str | None = typer.Option(None, "--llm-api-key", help="LLM API key override."),  # noqa: B008
-    llm_base_url: str | None = typer.Option(None, "--llm-base-url", help="LLM base URL override."),  # noqa: B008
-    llm_max_tokens: int = typer.Option(256, "--llm-max-tokens", help="Max tokens per LLM summary."),  # noqa: B008
-    force: bool = typer.Option(False, "--force", help="Bypass cache check and regenerate unconditionally."),  # noqa: B008
+    llm: bool = typer.Option(  # noqa: B008
+        False,
+        "--llm/--no-llm",
+        help="Enable LLM-powered file summaries (default: no-llm).",
+        rich_help_panel="LLM Summarization",
+    ),
+    llm_provider: str = typer.Option(  # noqa: B008
+        "openai",
+        "--llm-provider",
+        help="LLM provider: openai, anthropic, or ollama (default: openai).",
+        rich_help_panel="LLM Summarization",
+    ),
+    llm_model: str = typer.Option(  # noqa: B008
+        "",
+        "--llm-model",
+        help="Model string for the chosen provider. Uses provider default if empty.",
+        rich_help_panel="LLM Summarization",
+    ),
+    llm_api_key: str | None = typer.Option(  # noqa: B008
+        None,
+        "--llm-api-key",
+        help="API key override. Falls back to OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        rich_help_panel="LLM Summarization",
+    ),
+    llm_base_url: str | None = typer.Option(  # noqa: B008
+        None,
+        "--llm-base-url",
+        help="Override base URL, e.g. for Ollama or compatible endpoints.",
+        rich_help_panel="LLM Summarization",
+    ),
+    llm_max_tokens: int = typer.Option(  # noqa: B008
+        256,
+        "--llm-max-tokens",
+        help="Max tokens per LLM summary (default: 256).",
+        rich_help_panel="LLM Summarization",
+    ),
+    force: bool = typer.Option(  # noqa: B008
+        False,
+        "--force",
+        help="Bypass cache check and regenerate unconditionally.",
+        rich_help_panel="Cache",
+    ),
 ) -> None:
-    """Analyze a codebase and generate CONTEXT.md."""
+    """Analyze a repository and generate compressed context."""
     _setup_logging(verbose)
     start_time = time.perf_counter()
 
@@ -249,7 +296,10 @@ def analyze(
     )
 
 
-@app.command()
+@app.command(
+    short_help="Run analysis with detailed timing and stats.",
+    help="Run analysis with detailed timing and stats for each pipeline stage.",
+)
 def benchmark(
     root: Path = typer.Argument(  # noqa: B008
         ".",
@@ -258,9 +308,15 @@ def benchmark(
         file_okay=False,
         resolve_path=True,
     ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),  # noqa: B008
-    verbose: bool = typer.Option(False, "--verbose", "-v"),  # noqa: B008
-    no_git: bool = typer.Option(False, "--no-git"),  # noqa: B008
+    tokens: int = typer.Option(  # noqa: B008
+        None,
+        "--budget",
+        "--tokens",
+        "-t",
+        help="Token budget for context output.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging."),  # noqa: B008
+    no_git: bool = typer.Option(False, "--no-git", help="Skip git metadata collection."),  # noqa: B008
 ) -> None:
     """Run analysis with detailed timing and stats."""
     _setup_logging(verbose)
@@ -340,20 +396,48 @@ def benchmark(
     )
 
 
-@app.command()
+@app.command(
+    short_help="Watch a repository for changes and regenerate context.",
+    help="Watch a repository for source changes and regenerate context output.",
+)
 def watch(
     root: Path = typer.Argument(  # noqa: B008
         ".",
-        help="Repository root directory.",
+        help="Path to the repository root to watch (default: current directory).",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    tokens: int = typer.Option(None, "--tokens", "-t"),  # noqa: B008
-    output: Path = typer.Option(None, "--output", "-o"),  # noqa: B008
-    verbose: bool = typer.Option(False, "--verbose", "-v"),  # noqa: B008
-    no_git: bool = typer.Option(False, "--no-git"),  # noqa: B008
-    debounce: float = typer.Option(3.0, "--debounce", help="Debounce delay in seconds."),  # noqa: B008
+    tokens: int = typer.Option(  # noqa: B008
+        None,
+        "--budget",
+        "--tokens",
+        "-t",
+        help="Token budget forwarded to analyze on each rebuild.",
+    ),
+    output: Path = typer.Option(  # noqa: B008
+        None,
+        "--output",
+        "-o",
+        help="Output file path forwarded to analyze on each rebuild.",
+    ),
+    output_format: str = typer.Option(  # noqa: B008
+        "markdown",
+        "--format",
+        help="Output format forwarded to analyze on each rebuild.",
+    ),
+    exclude: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--exclude",
+        help="Glob patterns to exclude (repeatable).",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging."),  # noqa: B008
+    no_git: bool = typer.Option(False, "--no-git", help="Skip git metadata collection."),  # noqa: B008
+    debounce: float = typer.Option(
+        3.0,
+        "--debounce",
+        help="Seconds to wait after last change before re-analyzing (default: 3.0).",
+    ),  # noqa: B008
 ) -> None:
     """Watch for file changes and regenerate CONTEXT.md."""
     _setup_logging(verbose)
@@ -426,7 +510,7 @@ def watch(
         console.print("\n[bold]Watch stopped.[/]")
 
 
-@app.command()
+@app.command(short_help="Search the codebase semantically.")
 def search(
     query: str = typer.Argument(  # noqa: B008
         ...,
@@ -541,8 +625,8 @@ def search(
 # Cache commands
 # ---------------------------------------------------------------------------
 
-cache_app = typer.Typer(help="Manage the codectx cache.")
-app.add_typer(cache_app, name="cache")
+cache_app = typer.Typer(help="Manage the codectx cache for a repository.")
+app.add_typer(cache_app, name="cache", help="Manage the codectx cache for a repository.")
 
 
 @cache_app.command("export")
@@ -604,12 +688,12 @@ def cache_import(
 def cache_clear(
     root: Path = typer.Argument(  # noqa: B008
         ".",
-        help="Repository root directory.",
+        help="Repository root whose cache to delete (default: current directory).",
         exists=True,
         file_okay=False,
         resolve_path=True,
     ),
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt."),  # noqa: B008
+    force: bool = typer.Option(False, "--force", "--all", help="Skip confirmation prompt."),  # noqa: B008
 ) -> None:
     """Clear the codectx cache for this repository."""
     from codectx.cache.paths import get_cache_root
@@ -621,11 +705,13 @@ def cache_clear(
 
     if not force:
         import typer
+
         if not typer.confirm(f"Clear cache at {cache_root}? This will delete all cached data."):
             console.print("[dim]Cancelled.[/]")
             return
 
     import shutil
+
     try:
         shutil.rmtree(cache_root)
         console.print(f"[green]✓[/] Cache cleared for [bold]{root}[/]")
@@ -638,7 +724,7 @@ def cache_clear(
 def cache_info(
     root: Path = typer.Argument(  # noqa: B008
         ".",
-        help="Repository root directory.",
+        help="Repository root to inspect (default: current directory).",
         exists=True,
         file_okay=False,
         resolve_path=True,
@@ -670,6 +756,7 @@ def cache_info(
             for f in filenames:
                 fp = os.path.join(dirpath, f)
                 from contextlib import suppress
+
                 with suppress(OSError):
                     total_size += os.path.getsize(fp)
         table.add_row("Total Size", f"{total_size:,} bytes")
@@ -679,11 +766,17 @@ def cache_info(
     manifest = load_manifest(manifest_path)
     if manifest:
         table.add_row("Manifest Exists", "Yes")
-        table.add_row("Last Generated", datetime.fromtimestamp(manifest.generated_at).strftime('%Y-%m-%d %H:%M:%S'))
+        table.add_row(
+            "Last Generated",
+            datetime.fromtimestamp(manifest.generated_at).strftime("%Y-%m-%d %H:%M:%S"),
+        )
         table.add_row("CodeCtx Version", manifest.codectx_version)
         table.add_row("Token Budget", str(manifest.options.budget))
         table.add_row("Output Format", manifest.options.format)
-        table.add_row("Exclude Patterns", ", ".join(manifest.options.exclude) if manifest.options.exclude else "None")
+        table.add_row(
+            "Exclude Patterns",
+            ", ".join(manifest.options.exclude) if manifest.options.exclude else "None",
+        )
         table.add_row("Files Tracked", str(len(manifest.files)))
     else:
         table.add_row("Manifest Exists", "No")
@@ -691,6 +784,7 @@ def cache_info(
     if embeddings_path.exists():
         try:
             import lancedb
+
             db = lancedb.connect(str(embeddings_path))
             if "embeddings" in db.table_names():
                 table_ = db.open_table("embeddings")
@@ -706,7 +800,7 @@ def cache_info(
     console.print(table)
 
 
-@app.callback(invoke_without_command=True)
+@app.callback(invoke_without_command=True, no_args_is_help=True)
 def main(
     version: bool = typer.Option(
         False,
@@ -839,7 +933,9 @@ def _run_pipeline(config: object, quiet: bool = False) -> PipelineMetrics:
                     progress.update(task, description="Computing semantic relevance...")
                     cache_dir = config.root / CACHE_DIR_NAME
                     cache_dir.mkdir(exist_ok=True)
-                    sem_scores = semantic_score(config.query, files, parse_results, str(config.root))
+                    sem_scores = semantic_score(
+                        config.query, files, parse_results, str(config.root)
+                    )
             except Exception as exc:
                 import logging
 
