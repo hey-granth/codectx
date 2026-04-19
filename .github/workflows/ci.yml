@@ -40,7 +40,7 @@ jobs:
       - name: Install project and dev dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[semantic]"
+          pip install -e ".[semantic,llm]"
           pip install pytest pytest-cov ruff mypy vulture build
 
       - name: Auto-format code with Ruff
