@@ -1,9 +1,8 @@
-from dataclasses import dataclass
-from pathlib import Path
 import hashlib
 import json
 import os
-import time
+from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -16,7 +15,7 @@ class ManifestOptions:
 @dataclass
 class Manifest:
     codectx_version: str
-    generated_at: str
+    generated_at: float
     repo_root: str
     options: ManifestOptions
     files: dict[str, str]  # relative path -> sha256 hex
@@ -62,7 +61,7 @@ def load_manifest(manifest_path: Path) -> Manifest | None:
     try:
         if not manifest_path.is_file():
             return None
-        with open(manifest_path, "r", encoding="utf-8") as f:
+        with open(manifest_path, encoding="utf-8") as f:
             data = json.load(f)
         options_data = data.get("options", {})
         return Manifest(

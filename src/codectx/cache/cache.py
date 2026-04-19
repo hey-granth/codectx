@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from codectx.config.defaults import CACHE_DIR_NAME
+from codectx.config.loader import Config
 from codectx.parser.base import ParseResult, Symbol
 
 logger = logging.getLogger(__name__)
@@ -196,15 +197,54 @@ class Cache:
             A new Cache instance loaded from the imported data.
         """
         import tarfile
+        import tempfile
 
-        if not archive.is_file():
-            raise FileNotFoundError(f"Archive not found: {archive}")
+        cache_dir = root / CACHE_DIR_NAME
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
-        with tarfile.open(archive, "r:gz") as tar:
-            tar.extractall(path=root, filter="data")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with tarfile.open(archive, "r:gz") as tar:
+                tar.extractall(tmp_dir, filter='data')
+            import shutil
 
-        logger.info("Cache imported from %s to %s", archive, root / CACHE_DIR_NAME)
+            src = Path(tmp_dir) / CACHE_DIR_NAME
+            if src.is_dir():
+                shutil.rmtree(cache_dir)
+                shutil.move(str(src), str(cache_dir))
+
         return cls(root)
+
+    def is_output_up_to_date(self, config: Config) -> bool:
+        """Check if the output file is up to date based on manifest."""
+        from codectx import __version__
+        from codectx.cache.manifest import (
+            ManifestOptions,
+            collect_file_hashes,
+            is_up_to_date,
+            load_manifest,
+        )
+        from codectx.cache.paths import get_manifest_path
+        from codectx.walker import walk
+
+        # Load existing manifest
+        manifest_path = get_manifest_path(str(config.root))
+        manifest = load_manifest(manifest_path)
+        if manifest is None:
+            return False
+
+        # Collect current file hashes
+        files = walk(config.root, config.extra_ignore)
+        file_paths = [str(f) for f in files]
+        current_hashes = collect_file_hashes(file_paths, str(config.root))
+
+        # Build current options
+        current_options = ManifestOptions(
+            budget=config.token_budget,
+            format=config.output_format,
+            exclude=list(config.extra_ignore),
+        )
+
+        return is_up_to_date(manifest, current_hashes, current_options, __version__)
 
 
 def file_hash(path: Path) -> str:

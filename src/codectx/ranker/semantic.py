@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from codectx.cache.paths import get_embeddings_path
 from codectx.parser.base import ParseResult
 
 if TYPE_CHECKING:
@@ -107,6 +108,7 @@ def _ensure_embedding_table(db: Any, dim: int) -> Any:
 
 def embed_with_cache(
     file_contents: dict[str, str],
+    repo_root: str,
     model_name: str = "BAAI/bge-small-en-v1.5",
 ) -> dict[str, list[float]]:
     """Embed file contents with persistent lancedb cache and hash invalidation."""
@@ -124,7 +126,8 @@ def embed_with_cache(
 
     cache_root = _cache_root_dir()
     cache_root.mkdir(parents=True, exist_ok=True)
-    db = lancedb.connect(str(cache_root / "embeddings.lance"))
+    embeddings_path = get_embeddings_path(repo_root)
+    db = lancedb.connect(str(embeddings_path))
 
     model = SentenceTransformer(model_name)
     sample_embedding = _as_float_list(model.encode(["dimension probe"], show_progress_bar=False)[0])
@@ -180,7 +183,28 @@ def embed_with_cache(
         if rows_to_add:
             table.add(rows_to_add)
 
+    _evict_stale_embeddings(table, set(file_contents.keys()))
+
     return results
+
+
+def _evict_stale_embeddings(table: Any, current_paths: set[str]) -> None:
+    """
+    Delete rows from LanceDB where file_path is not in current_paths.
+    Runs after embedding, on every successful call to embed_with_cache.
+    Never raises.
+    """
+    try:
+        # LanceDB delete syntax:
+        # table.delete("file_path NOT IN ('a', 'b', 'c')")
+        if not current_paths:
+            return
+        path_list = ", ".join(f"'{p}'" for p in current_paths)
+        table.delete(f"file_path NOT IN ({path_list})")
+    except Exception as e:
+        import sys
+
+        print(f"[codectx] embedding eviction warning: {e}", file=sys.stderr)
 
 
 def is_available() -> bool:
@@ -192,7 +216,7 @@ def semantic_score(
     query: str,
     files: list[Path],
     parse_results: dict[Path, ParseResult],
-    cache_dir: Path,
+    repo_root: str,
 ) -> dict[Path, float]:
     """Return semantic relevance score 0.0–1.0 per file for the given query.
 
@@ -200,7 +224,7 @@ def semantic_score(
         query: Natural language query to rank files against.
         files: List of file paths to score.
         parse_results: Parse results for each file.
-        cache_dir: Directory to store lancedb tables for caching.
+        repo_root: Directory to store lancedb tables for caching.
 
     Returns:
         Dict mapping file path to semantic similarity score (0.0–1.0).
@@ -237,7 +261,7 @@ def semantic_score(
     if not file_contents:
         return {}
 
-    doc_embeddings = embed_with_cache(file_contents, model_name=_DEFAULT_MODEL)
+    doc_embeddings = embed_with_cache(file_contents, repo_root, model_name=_DEFAULT_MODEL)
 
     model = SentenceTransformer(_DEFAULT_MODEL)
     query_vector = _as_float_list(model.encode([query], show_progress_bar=False)[0])

@@ -172,6 +172,7 @@ def analyze(
     llm_api_key: str | None = typer.Option(None, "--llm-api-key", help="LLM API key override."),  # noqa: B008
     llm_base_url: str | None = typer.Option(None, "--llm-base-url", help="LLM base URL override."),  # noqa: B008
     llm_max_tokens: int = typer.Option(256, "--llm-max-tokens", help="Max tokens per LLM summary."),  # noqa: B008
+    force: bool = typer.Option(False, "--force", help="Bypass cache check and regenerate unconditionally."),  # noqa: B008
 ) -> None:
     """Analyze a codebase and generate CONTEXT.md."""
     _setup_logging(verbose)
@@ -211,6 +212,15 @@ def analyze(
         llm_base_url=llm_base_url,
         llm_max_tokens=llm_max_tokens,
     )
+
+    # Check manifest for up-to-date status unless --force is used
+    if not force:
+        from codectx.cache import Cache
+
+        cache = Cache(config.root)
+        if cache.is_output_up_to_date(config):
+            console.print("[green]Context is up to date. Use --force to regenerate.[/]")
+            raise typer.Exit()
 
     metrics = _run_pipeline(config, quiet=output_format == "json")
     elapsed = time.perf_counter() - start_time
@@ -506,7 +516,7 @@ def search(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True
         ) as progress:
             progress.add_task("Computing semantic relevance...", total=None)
-            scores = semantic_score(query, files, parse_results, cache_dir)
+            scores = semantic_score(query, files, parse_results, str(config.root))
 
         sorted_files = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
@@ -588,6 +598,112 @@ def cache_import(
     except FileNotFoundError as exc:
         console.print(f"[red]Error:[/] {exc}")
         raise typer.Exit(1) from exc
+
+
+@cache_app.command("clear")
+def cache_clear(
+    root: Path = typer.Argument(  # noqa: B008
+        ".",
+        help="Repository root directory.",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+    ),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt."),  # noqa: B008
+) -> None:
+    """Clear the codectx cache for this repository."""
+    from codectx.cache.paths import get_cache_root
+
+    cache_root = get_cache_root(str(root))
+    if not cache_root.exists():
+        console.print("[yellow]No cache found for this repository.[/]")
+        return
+
+    if not force:
+        import typer
+        if not typer.confirm(f"Clear cache at {cache_root}? This will delete all cached data."):
+            console.print("[dim]Cancelled.[/]")
+            return
+
+    import shutil
+    try:
+        shutil.rmtree(cache_root)
+        console.print(f"[green]✓[/] Cache cleared for [bold]{root}[/]")
+    except OSError as exc:
+        console.print(f"[red]Error clearing cache:[/] {exc}")
+        raise typer.Exit(1) from exc
+
+
+@cache_app.command("info")
+def cache_info(
+    root: Path = typer.Argument(  # noqa: B008
+        ".",
+        help="Repository root directory.",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+    ),
+) -> None:
+    """Show information about the codectx cache for this repository."""
+    import os
+    from datetime import datetime
+
+    from rich.table import Table
+
+    from codectx.cache.manifest import load_manifest
+    from codectx.cache.paths import get_cache_root, get_embeddings_path, get_manifest_path
+
+    cache_root = get_cache_root(str(root))
+    manifest_path = get_manifest_path(str(root))
+    embeddings_path = get_embeddings_path(str(root))
+
+    table = Table(title=f"Cache Info for {root}")
+    table.add_column("Property", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+
+    table.add_row("Cache Location", str(cache_root))
+
+    if cache_root.exists():
+        # Calculate total size
+        total_size = 0
+        for dirpath, _dirnames, filenames in os.walk(cache_root):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                from contextlib import suppress
+                with suppress(OSError):
+                    total_size += os.path.getsize(fp)
+        table.add_row("Total Size", f"{total_size:,} bytes")
+    else:
+        table.add_row("Total Size", "N/A (no cache)")
+
+    manifest = load_manifest(manifest_path)
+    if manifest:
+        table.add_row("Manifest Exists", "Yes")
+        table.add_row("Last Generated", datetime.fromtimestamp(manifest.generated_at).strftime('%Y-%m-%d %H:%M:%S'))
+        table.add_row("CodeCtx Version", manifest.codectx_version)
+        table.add_row("Token Budget", str(manifest.options.budget))
+        table.add_row("Output Format", manifest.options.format)
+        table.add_row("Exclude Patterns", ", ".join(manifest.options.exclude) if manifest.options.exclude else "None")
+        table.add_row("Files Tracked", str(len(manifest.files)))
+    else:
+        table.add_row("Manifest Exists", "No")
+
+    if embeddings_path.exists():
+        try:
+            import lancedb
+            db = lancedb.connect(str(embeddings_path))
+            if "embeddings" in db.table_names():
+                table_ = db.open_table("embeddings")
+                count = table_.count_rows()
+                table.add_row("Embeddings Count", str(count))
+            else:
+                table.add_row("Embeddings Count", "Table not found")
+        except Exception:
+            table.add_row("Embeddings Count", "Error reading")
+    else:
+        table.add_row("Embeddings Count", "N/A")
+
+    console.print(table)
 
 
 @app.callback(invoke_without_command=True)
@@ -723,7 +839,7 @@ def _run_pipeline(config: object, quiet: bool = False) -> PipelineMetrics:
                     progress.update(task, description="Computing semantic relevance...")
                     cache_dir = config.root / CACHE_DIR_NAME
                     cache_dir.mkdir(exist_ok=True)
-                    sem_scores = semantic_score(config.query, files, parse_results, cache_dir)
+                    sem_scores = semantic_score(config.query, files, parse_results, str(config.root))
             except Exception as exc:
                 import logging
 
@@ -831,6 +947,34 @@ def _run_pipeline(config: object, quiet: bool = False) -> PipelineMetrics:
 
         # Step 7: Persist cache
         cache.save()
+
+        # Save manifest for up-to-date checking
+        import time
+
+        from codectx import __version__
+        from codectx.cache.manifest import (
+            Manifest,
+            ManifestOptions,
+            collect_file_hashes,
+            save_manifest,
+        )
+        from codectx.cache.paths import get_manifest_path
+
+        manifest_path = get_manifest_path(str(config.root))
+        file_paths = [str(f) for f in files]
+        file_hashes = collect_file_hashes(file_paths, str(config.root))
+        manifest = Manifest(
+            codectx_version=__version__,
+            generated_at=time.time(),
+            repo_root=str(config.root),
+            options=ManifestOptions(
+                budget=config.token_budget,
+                format=config.output_format,
+                exclude=list(config.extra_ignore),
+            ),
+            files=file_hashes,
+        )
+        save_manifest(manifest_path, manifest)
 
         progress.update(task, description="Done!")
 
