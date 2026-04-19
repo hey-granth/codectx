@@ -204,7 +204,7 @@ class Cache:
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with tarfile.open(archive, "r:gz") as tar:
-                tar.extractall(tmp_dir, filter='data')
+                tar.extractall(tmp_dir, filter="data")
             import shutil
 
             src = Path(tmp_dir) / CACHE_DIR_NAME

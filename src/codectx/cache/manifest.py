@@ -95,13 +95,14 @@ def save_manifest(manifest_path: Path, manifest: Manifest) -> None:
         },
         "files": manifest.files,
     }
-    tmp_path = manifest_path.with_suffix('.json.tmp')
+    tmp_path = manifest_path.with_suffix(".json.tmp")
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, separators=(",", ":"))
         os.replace(tmp_path, manifest_path)
     except OSError as e:
         import sys
+
         print(f"[codectx] manifest save warning: {e}", file=sys.stderr)
 
 

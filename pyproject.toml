@@ -87,9 +87,11 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
-files = ["src"]
+files = ["src/codectx"]
 warn_unused_ignores = true
 strict = true
+follow_imports = "skip"
+exclude = ["^\\.venv/", "^venv/", "^dist/", "^build/", ".*/site-packages/.*"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -101,6 +103,19 @@ module = [
     "tomli",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["transformers.*"]
+ignore_errors = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["lancedb.*", "fastembed.*", "watchdog.*", "tree_sitter.*", "rustworkx.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["codectx.cli"]
+disable_error_code = ["untyped-decorator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

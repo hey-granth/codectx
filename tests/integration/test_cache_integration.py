@@ -1,15 +1,10 @@
 """Integration tests for cache functionality."""
 
-import os
-import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from codectx.cache import Cache
-from codectx.cache.manifest import load_manifest
 from codectx.cache.paths import get_cache_root, get_manifest_path
 from codectx.config.loader import load_config
 
@@ -53,9 +48,15 @@ class TestCacheIntegration:
             assert not cache.is_output_up_to_date(config)
 
             # Create manifest manually
-            from codectx.cache.manifest import save_manifest, collect_file_hashes, Manifest, ManifestOptions
-            from codectx import __version__
             import time
+
+            from codectx import __version__
+            from codectx.cache.manifest import (
+                Manifest,
+                ManifestOptions,
+                collect_file_hashes,
+                save_manifest,
+            )
 
             manifest_path = get_manifest_path(str(repo_root))
             file_hashes = collect_file_hashes([str(test_file)], str(repo_root))
@@ -95,12 +96,14 @@ class TestCacheIntegration:
 
             # Initially no cached result
             import hashlib
+
             file_hash = hashlib.sha256(test_file.read_bytes()).hexdigest()
             cached = cache.get_parse_result(test_file, file_hash)
             assert cached is None
 
             # Parse and cache
             from codectx.parser.treesitter import parse_files
+
             parse_results = parse_files([test_file])
             result = parse_results[test_file]
 
@@ -133,8 +136,9 @@ class TestCacheIntegration:
             test_file = repo_root / "test.py"
             test_file.write_text("print('test')")
 
-            from codectx.parser.treesitter import parse_files
             import hashlib
+
+            from codectx.parser.treesitter import parse_files
 
             parse_results = parse_files([test_file])
             result = parse_results[test_file]
@@ -173,6 +177,7 @@ class TestCacheIntegration:
 
             # Clear cache
             import shutil
+
             shutil.rmtree(cache_dir)
             assert not cache_dir.exists()
 
@@ -186,8 +191,6 @@ class TestCacheIntegration:
             repo2 = tmpdir_path / "repo2"
             repo2.mkdir()
 
-            cache1 = Cache(repo1)
-            cache2 = Cache(repo2)
 
             cache_root1 = get_cache_root(str(repo1))
             cache_root2 = get_cache_root(str(repo2))
@@ -202,4 +205,3 @@ class TestCacheIntegration:
             # Should not exist in repo2 cache
             test_file2 = cache_root2 / "test.txt"
             assert not test_file2.exists()
-

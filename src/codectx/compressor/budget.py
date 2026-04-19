@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import tiktoken
 
 from codectx.config.defaults import DEFAULT_TOKEN_BUDGET, TIKTOKEN_ENCODING
@@ -64,5 +66,5 @@ class TokenBudget:
         # Truncate to fit
         truncated_tokens = tokens[:limit]
         self.used += len(truncated_tokens)
-        truncated = enc.decode(truncated_tokens)
+        truncated = cast(str, enc.decode(truncated_tokens))
         return truncated + "\n... [truncated to fit token budget]"

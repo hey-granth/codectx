@@ -15,6 +15,7 @@
 ### Changed
 - `codectx.__version__` now resolves using `importlib.metadata` with a local fallback.
 - Project version updated to `0.3.0`.
+- Type checking guidance now targets `mypy src/codectx --strict` to avoid scanning virtualenv/site-packages paths.
 
 ### Dependencies
 - Added runtime dependency: `watchdog>=4.0`.

@@ -51,6 +51,10 @@ pip install codectx
 ```
 
 ```bash
+pip install codectx[llm]
+```
+
+```bash
 uv add codectx
 ```
 
@@ -88,11 +92,30 @@ codectx analyze . --tokens 60000
 # custom output path
 codectx analyze . --output my-context.md
 
+# machine-readable output
+codectx analyze . --format json
+
 # watch mode — regenerate on file changes
 codectx watch .
 
+# tune watch debounce window
+codectx watch . --debounce 1.5
+
 # semantic search ranking
 codectx analyze . --query "authentication flows"
+
+# LLM summaries (requires codectx[llm])
+codectx analyze . --llm --llm-provider openai --llm-model gpt-4.1-mini
+codectx analyze . --llm --llm-provider ollama --llm-model llama3.1 --llm-base-url http://localhost:11434/v1
+
+# bypass manifest up-to-date checks
+codectx analyze . --force
+
+# cache management
+codectx cache info .
+codectx cache clear . --force
+codectx cache export . --output .codectx_cache.tar.gz
+codectx cache import . --input .codectx_cache.tar.gz
 
 # task-specific ranking profiles
 codectx analyze . --task architecture
@@ -177,6 +200,14 @@ CONTEXT.md
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detail on each stage. See [DECISIONS.md](DECISIONS.md) for reasoning behind key design choices.
 
+## Caching
+
+codectx persists cache data under your OS cache directory (default: `~/.cache/codectx`, or `$XDG_CACHE_HOME/codectx` when set), scoped by repository hash.
+
+- Parse/cache artifacts are reused across runs.
+- A run-level manifest tracks options and file hashes to skip no-op `analyze` runs.
+- Semantic embedding cache is stored under the repo-scoped cache path and invalidated by file-content hash changes.
+
 ## Development setup
 
 ```bash
@@ -201,7 +232,7 @@ pytest --cov=src/codectx   # with coverage
 ### Type checking and linting
 
 ```bash
-mypy src
+mypy src/codectx --strict
 ruff check src tests
 ruff format src tests
 ```

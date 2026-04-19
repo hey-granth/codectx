@@ -100,33 +100,41 @@ def fake_semantic(monkeypatch: pytest.MonkeyPatch) -> tuple[_FakeDB, _FakeLance,
     return db, lance, model
 
 
-def test_cache_miss_embeds(fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel]) -> None:
+def test_cache_miss_embeds(
+    tmp_path: Path,
+    fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel],
+) -> None:
     _db, _lance, model = fake_semantic
-    res = semantic.embed_with_cache({"a.py": "print('a')"})
+    res = semantic.embed_with_cache({"a.py": "print('a')"}, repo_root=str(tmp_path))
     assert "a.py" in res
     assert model.calls >= 2  # probe + embed
 
 
-def test_cache_hit_skips_embed(fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel]) -> None:
+def test_cache_hit_skips_embed(
+    tmp_path: Path,
+    fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel],
+) -> None:
     _db, _lance, model = fake_semantic
-    semantic.embed_with_cache({"a.py": "print('a')"})
+    semantic.embed_with_cache({"a.py": "print('a')"}, repo_root=str(tmp_path))
     before = model.calls
-    semantic.embed_with_cache({"a.py": "print('a')"})
+    semantic.embed_with_cache({"a.py": "print('a')"}, repo_root=str(tmp_path))
     # only probe call should happen in second run, not per-file re-embed
     assert model.calls == before + 1
 
 
 def test_cache_invalidated_on_content_change(
+    tmp_path: Path,
     fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel],
 ) -> None:
     _db, _lance, model = fake_semantic
-    semantic.embed_with_cache({"a.py": "print('a')"})
+    semantic.embed_with_cache({"a.py": "print('a')"}, repo_root=str(tmp_path))
     before = model.calls
-    semantic.embed_with_cache({"a.py": "print('changed')"})
+    semantic.embed_with_cache({"a.py": "print('changed')"}, repo_root=str(tmp_path))
     assert model.calls >= before + 2
 
 
 def test_schema_mismatch_recreates_table(
+    tmp_path: Path,
     fake_semantic: tuple[_FakeDB, _FakeLance, _FakeModel],
 ) -> None:
     db, _lance, _model = fake_semantic
@@ -134,7 +142,7 @@ def test_schema_mismatch_recreates_table(
         "codectx_embeddings",
         data=[{"file_path": "a.py", "file_hash": "x", "embedding": [1.0, 2.0]}],
     )
-    res = semantic.embed_with_cache({"a.py": "print('a')"})
+    res = semantic.embed_with_cache({"a.py": "print('a')"}, repo_root=str(tmp_path))
     assert "a.py" in res
     assert len(res["a.py"]) == 3
 
@@ -146,6 +154,9 @@ def test_cache_respects_xdg_cache_home(
 ) -> None:
     _db, lance, _model = fake_semantic
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    semantic.embed_with_cache({"a.py": "print('a')"})
+    semantic.embed_with_cache({"a.py": "print('a')"}, repo_root="/some/fixed/repo")
     assert lance.paths
-    assert str(tmp_path / "codectx") in lance.paths[0]
+    cache_root = tmp_path / "codectx"
+    assert cache_root.exists()
+    assert any(p.is_dir() for p in cache_root.iterdir())
+    assert cache_root in Path(lance.paths[0]).parents

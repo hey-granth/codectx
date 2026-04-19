@@ -1,14 +1,10 @@
 """Unit tests for cache functionality."""
 
 import hashlib
-import json
 import os
 import tempfile
-import time
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from codectx.cache.manifest import (
     Manifest,
@@ -41,11 +37,13 @@ class TestPaths:
 
     def test_get_cache_root_no_xdg(self):
         """Test fallback to ~/.cache when XDG_CACHE_HOME not set."""
-        with tempfile.TemporaryDirectory() as tmp_home:
-            with patch.dict(os.environ, {}, clear=True):
-                with patch("pathlib.Path.home", return_value=Path(tmp_home)):
-                    cache_root = get_cache_root("/some/repo")
-                    assert str(cache_root).startswith(f"{tmp_home}/.cache/codectx/")
+        with (
+            tempfile.TemporaryDirectory() as tmp_home,
+            patch.dict(os.environ, {}, clear=True),
+            patch("pathlib.Path.home", return_value=Path(tmp_home)),
+        ):
+            cache_root = get_cache_root("/some/repo")
+            assert str(cache_root).startswith(f"{tmp_home}/.cache/codectx/")
 
     def test_get_manifest_path(self):
         """Test manifest path generation."""
@@ -239,8 +237,9 @@ class TestEviction:
     @patch("codectx.ranker.semantic.lancedb")
     def test_evict_stale_embeddings(self, mock_lancedb):
         """Test eviction of stale embeddings."""
-        from codectx.ranker.semantic import _evict_stale_embeddings
         from unittest.mock import MagicMock
+
+        from codectx.ranker.semantic import _evict_stale_embeddings
 
         # Mock LanceDB table
         mock_table = MagicMock()

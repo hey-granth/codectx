@@ -88,5 +88,6 @@ def test_no_flag_has_empty_description() -> None:
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("--") and stripped.endswith(stripped.split()[0]):
-                assert False, f"Flag with no description found in `{' '.join(cmd)}`: {stripped}"
-
+                raise AssertionError(
+                    f"Flag with no description found in `{' '.join(cmd)}`: {stripped}"
+                )

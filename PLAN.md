@@ -1,5 +1,22 @@
 # codectx — Development Plan
 
+## v0.3.0 — ✅ Released 2026-04-19
+
+- [x] Persistent semantic embedding cache with hash invalidation
+- [x] Debounced watch mode (`--debounce`) with relevant-source filtering
+- [x] JSON output support via `--format json`
+- [x] LLM summarization CLI options (`--llm`, provider/model/base-url)
+- [x] Symbol cross-reference edges and exported symbol reference data
+- [x] Constants extraction coverage in structured summaries
+- [x] Config-file demotion behavior for ranking/output
+- [x] Mypy workflow updated to `mypy src/codectx --strict`
+
+## v0.4.0 — Planned
+
+- Incremental watch pipeline improvements
+- Additional language/resolver depth
+- Documentation and schema hardening for programmatic consumers
+
 ## What ships today (v0.1.3 / v0.2.0)
 
 ### Pipeline

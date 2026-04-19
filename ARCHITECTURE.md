@@ -52,6 +52,9 @@ The Graph Builder processes parse results to construct a `rustworkx.DiGraph`:
    - **Fan-in** — in-degree per node (how many files import this module)
    - **Fan-out** — out-degree per node (how many modules this file imports)
    - **Strongly connected components** — detect cyclic dependencies
+4. Build symbol cross-reference edges (`symbol_ref`) from parser symbol usage data
+
+The graph builder now exposes symbol references through `get_symbol_references()` so downstream formatters can emit cross-file symbol usage in structured output.
 
 The graph enables ranking algorithms to identify important modules based on structural position.
 
@@ -125,7 +128,22 @@ The Formatter writes sections in fixed order:
 
 Each section is preceded by a Markdown heading and terminated with metadata (token count, file count).
 
-**Output:** Markdown string suitable for writing to disk as `CONTEXT.md`.
+The formatter supports two output modes:
+
+- `markdown` (default): writes human-readable context sections to `CONTEXT.md`
+- `json`: writes a machine-readable payload with top-level schema fields such as `version`, `root`, `budget_tokens`, `totals`, `files`, and `sections`
+
+**Output:** Markdown string or JSON payload suitable for writing to disk.
+
+## Cache Subsystem
+
+The cache subsystem is split into three concerns:
+
+- `cache/paths.py` resolves repo-scoped cache paths under `~/.cache/codectx` or `$XDG_CACHE_HOME/codectx`
+- `cache/manifest.py` stores run-level manifest metadata (options + file hashes) used for up-to-date short-circuit checks
+- Semantic embedding cache persists vectors in LanceDB and evicts stale rows for removed paths
+
+Embedding cache invalidation is content-hash based, and stale-embedding eviction runs after successful embedding updates.
 
 ## Data Flow Diagram
 
